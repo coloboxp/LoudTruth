@@ -8,14 +8,14 @@ class SignalProcessor
 public:
     struct Statistics
     {
-        int min = 1023;
-        int max = 0;
+        uint16_t min = 4095;
+        uint16_t max = 0;
         float avg = 0;
-        int samples = 0;
+        uint32_t samples = 0;
 
         void reset()
         {
-            min = 1023;
+            min = 4095;
             max = 0;
             avg = 0;
             samples = 0;
