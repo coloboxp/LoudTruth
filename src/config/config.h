@@ -67,3 +67,19 @@ namespace display_config
         constexpr uint8_t PLOT_BASELINE_Y_POSITION = 63; // Plot baseline Y position
     }
 }
+
+// ADC Configuration
+namespace adc_config
+{
+    constexpr uint8_t RESOLUTION_BITS = 12;
+    constexpr uint16_t MAX_VALUE = (1 << RESOLUTION_BITS) - 1; // 4095 for 12-bit
+    constexpr uint8_t AVERAGING_SAMPLES = 32;                  // Number of samples to average
+
+    namespace sound_sensor
+    {
+        constexpr float VOLTAGE_REFERENCE = 3.3f; // ESP32 ADC reference voltage
+        constexpr float VOLTAGE_GAIN = 26.0f;     // Grove sensor gain in dB
+        constexpr float MIN_DB = -60.0f;          // Sensor min sensitivity in dBV/Pa
+        constexpr float MAX_DB = -56.0f;          // Sensor max sensitivity in dBV/Pa
+    }
+}

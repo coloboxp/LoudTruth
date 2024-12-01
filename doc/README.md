@@ -1,6 +1,30 @@
 # Noise Level Monitor - Technical Documentation
 
-An ESP32-based device that monitors ambient noise levels, categorizes them, and logs the data for analysis.
+## ADC Configuration
+
+The project uses the ESP32-S3's ADC with optimized settings:
+
+- 12-bit resolution (0-4095 range)
+- 11dB attenuation for 3.3V reference voltage
+- 32-sample averaging for noise reduction
+- Optimized clock divider settings
+
+### Sound Sensor Specifications
+
+- Operating Voltage: 3.3V
+- Voltage Gain: 26 dB
+- Microphone sensitivity: -60~-56dBV/Pa
+- ADC Input Range: 0-4095 (12-bit)
+
+## Board Configuration
+
+Using Freenove ESP32-S3 WROOM with:
+
+- 8MB Flash / 8MB PSRAM
+- 240MHz CPU frequency
+- USB-CDC enabled for programming and monitoring
+- DIO flash mode with 80MHz flash frequency
+- Built-in debugging support
 
 ## Features
 
@@ -98,10 +122,11 @@ pio run -t upload
 ## Project Structure
 
 See other documentation files for detailed information:
+
 - [Hardware Documentation](hw.md)
 - [Flow and Timing](flowNtiming.md)
 - [Architecture](arch.md)
 - [Component Dependencies](componentdeps.md)
 - [State Management](state.md)
 - [Data Flow](dataflow.md)
-- [Component Architecture](componentarch.md) 
+- [Component Architecture](componentarch.md)

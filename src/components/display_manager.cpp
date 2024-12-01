@@ -60,9 +60,11 @@ void DisplayManager::draw_plot()
         int x1 = i * 2;
         int x2 = (i + 1) * 2;
         int y1 = display_config::plot::PLOT_BASELINE_Y_POSITION -
-                 map(m_plot_buffer[i], 0, 1023, 0, display_config::plot::PLOT_HEIGHT);
+                 map(m_plot_buffer[i], 0, adc_config::MAX_VALUE, 0,
+                     display_config::plot::PLOT_HEIGHT);
         int y2 = display_config::plot::PLOT_BASELINE_Y_POSITION -
-                 map(m_plot_buffer[(i + 1)], 0, 1023, 0, display_config::plot::PLOT_HEIGHT);
+                 map(m_plot_buffer[(i + 1)], 0, adc_config::MAX_VALUE, 0,
+                     display_config::plot::PLOT_HEIGHT);
         m_u8g2.drawLine(x1, y1, x2, y2);
     }
 }
