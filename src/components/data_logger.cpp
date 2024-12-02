@@ -2,6 +2,10 @@
 
 DataLogger::DataLogger() = default;
 
+/**
+ * @brief Initialize the data logger.
+ * @return True if initialization is successful, false otherwise.
+ */
 bool DataLogger::begin()
 {
     if (!SD.begin(pins::sd::CS))
@@ -16,6 +20,10 @@ bool DataLogger::begin()
     return create_headers();
 }
 
+/**
+ * @brief Create the headers for the data file.
+ * @return True if the headers are created successfully, false otherwise.
+ */
 bool DataLogger::create_headers()
 {
     if (!m_initialized || SD.exists(FILENAME))
@@ -34,6 +42,11 @@ bool DataLogger::create_headers()
     return true;
 }
 
+/**
+ * @brief Log the data to the file.
+ * @param signal_processor The signal processor instance.
+ * @return True if the data is logged successfully, false otherwise.
+ */
 bool DataLogger::log_data(const SignalProcessor &signal_processor)
 {
     if (!m_initialized)

@@ -1,5 +1,8 @@
 #include "display_manager.hpp"
 
+/**
+ * @brief Constructor for the DisplayManager class.
+ */
 DisplayManager::DisplayManager()
     : m_u8g2(U8G2_R0,
              pins::display::CS,
@@ -9,6 +12,9 @@ DisplayManager::DisplayManager()
     memset(m_plot_buffer, 0, sizeof(m_plot_buffer));
 }
 
+/**
+ * @brief Initialize the display.
+ */
 void DisplayManager::begin()
 {
     m_u8g2.begin();
@@ -16,6 +22,10 @@ void DisplayManager::begin()
     digitalWrite(pins::display::BACKLIGHT, HIGH);
 }
 
+/**
+ * @brief Update the display with the current signal processor values.
+ * @param signal_processor The signal processor instance.
+ */
 void DisplayManager::update(const SignalProcessor &signal_processor)
 {
     m_u8g2.clearBuffer();
@@ -24,12 +34,20 @@ void DisplayManager::update(const SignalProcessor &signal_processor)
     m_u8g2.sendBuffer();
 }
 
+/**
+ * @brief Add a point to the plot buffer.
+ * @param value The value to add to the plot buffer.
+ */
 void DisplayManager::add_plot_point(int value)
 {
     m_plot_buffer[m_plot_index] = value;
     m_plot_index = (m_plot_index + 1) % display_config::plot::PLOT_POINTS;
 }
 
+/**
+ * @brief Draw the statistics on the display.
+ * @param signal_processor The signal processor instance.
+ */
 void DisplayManager::draw_stats(const SignalProcessor &signal_processor)
 {
     m_u8g2.setFont(u8g2_font_6x10_tf);
@@ -53,6 +71,9 @@ void DisplayManager::draw_stats(const SignalProcessor &signal_processor)
     m_u8g2.drawStr(0, 30, fifteen_min_str.c_str());
 }
 
+/**
+ * @brief Draw the plot on the display.
+ */
 void DisplayManager::draw_plot()
 {
     for (int i = 0; i < display_config::plot::PLOT_POINTS - 1; i++)
@@ -69,6 +90,11 @@ void DisplayManager::draw_plot()
     }
 }
 
+/**
+ * @brief Convert a noise level to a string.
+ * @param level The noise level to convert.
+ * @return The noise level as a string.
+ */
 const char *DisplayManager::noise_level_to_string(SignalProcessor::NoiseLevel level)
 {
     switch (level)

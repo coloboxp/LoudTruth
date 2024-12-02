@@ -2,6 +2,10 @@
 
 NoiseMonitor::NoiseMonitor() = default;
 
+/**
+ * @brief Initialize the noise monitor.
+ * @return True if initialization is successful, false otherwise.
+ */ 
 bool NoiseMonitor::begin()
 {
     m_sound_sensor.begin();
@@ -9,6 +13,9 @@ bool NoiseMonitor::begin()
     return m_logger.begin();
 }
 
+/**
+ * @brief Update the noise monitor.
+ */
 void NoiseMonitor::update()
 {
     unsigned long current_time = millis();
@@ -19,6 +26,9 @@ void NoiseMonitor::update()
     handle_logging();
 }
 
+/**
+ * @brief Handle the sampling task.
+ */
 void NoiseMonitor::handle_sampling()
 {
     unsigned long current_time = millis();
@@ -35,6 +45,9 @@ void NoiseMonitor::handle_sampling()
     }
 }
 
+/**
+ * @brief Handle the display task.
+ */
 void NoiseMonitor::handle_display()
 {
     unsigned long current_time = millis();
@@ -46,6 +59,9 @@ void NoiseMonitor::handle_display()
     }
 }
 
+/**
+ * @brief Handle the logging task.
+ */
 void NoiseMonitor::handle_logging()
 {
     unsigned long current_time = millis();

@@ -1,10 +1,16 @@
 #include "sound_sensor.hpp"
 
+/**
+ * @brief Initialize the sound sensor.
+ */
 void SoundSensor::begin()
 {
     configure_adc();
 }
 
+/**
+ * @brief Configure the ADC for the sound sensor.
+ */
 void SoundSensor::configure_adc()
 {
     // Configure ADC for 12-bit resolution
@@ -19,6 +25,11 @@ void SoundSensor::configure_adc()
 #endif
 }
 
+/**
+ * @brief Read an averaged sample from the sound sensor.
+ * @param num_samples The number of samples to read and average.
+ * @return The averaged sample value.
+ */
 uint16_t SoundSensor::read_averaged_sample(uint8_t num_samples)
 {
     uint32_t sum = 0;

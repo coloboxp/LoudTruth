@@ -4,6 +4,9 @@
 #include "config/config.h"
 #include "signal_processor.hpp"
 
+/**
+ * @brief Class representing the data logger.
+ */
 class DataLogger
 {
 public:

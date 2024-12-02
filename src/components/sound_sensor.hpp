@@ -3,6 +3,9 @@
 #include <Arduino.h>
 #include "config/config.h"
 
+/**
+ * @brief Class representing the sound sensor.
+ */
 class SoundSensor
 {
 public:

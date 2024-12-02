@@ -5,6 +5,9 @@
 #include "data_logger.hpp"
 #include "signal_processor.hpp"
 
+/**
+ * @brief Class representing the noise monitor.
+ */
 class NoiseMonitor
 {
 public:

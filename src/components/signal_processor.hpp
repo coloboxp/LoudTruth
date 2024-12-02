@@ -3,6 +3,9 @@
 #include <Arduino.h>
 #include "config/config.h"
 
+/**
+ * @brief Class representing the signal processor.
+ */
 class SignalProcessor
 {
 public:
