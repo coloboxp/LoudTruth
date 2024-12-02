@@ -10,7 +10,9 @@ class NoiseMonitor {
 }
 
     class SignalProcessor {
-        -Statistics stats
+        -Statistics one_min_stats
+        -Statistics fifteen_min_stats
+        -Statistics daily_stats
         -float ema_value
         -float baseline_ema
         +process_sample()

@@ -5,7 +5,7 @@ graph TD
     ESP32 --> |ADC| SOUND[Sound Sensor]
 
     subgraph SPI Bus
-        LCD -.->|MOSI: GPIO11<br>SCK: GPIO SD
+        LCD -.->|MOSI: GPIO11<br>SCK: GPIO10|
     end
 
     subgraph Display Pins
