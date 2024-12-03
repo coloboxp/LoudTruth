@@ -5,11 +5,12 @@ NoiseMonitor::NoiseMonitor() = default;
 /**
  * @brief Initialize the noise monitor.
  * @return True if initialization is successful, false otherwise.
- */ 
+ */
 bool NoiseMonitor::begin()
 {
     m_sound_sensor.begin();
     m_display.begin();
+    m_led_indicator.begin();
     return m_logger.begin();
 }
 
@@ -55,6 +56,7 @@ void NoiseMonitor::handle_display()
     if (current_time - m_last_display_time >= intervals::DISPLAY_INTERVAL)
     {
         m_display.update(m_signal_processor);
+        m_led_indicator.update(m_signal_processor);
         m_last_display_time = current_time;
     }
 }

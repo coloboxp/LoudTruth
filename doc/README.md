@@ -30,11 +30,10 @@ Using Freenove ESP32-S3 WROOM with:
 
 - Real-time noise level monitoring using sound sensor
 - Dynamic noise categorization using Exponential Moving Average (EMA)
-- Categories: OK, Regular, High, and Toxic based on baseline noise level
-- LCD display showing:
-  - Current noise level and category
-  - 1-minute, 15-minute statistics (avg, min, max)
-  - Real-time plot of the last minute
+- Visual feedback through:
+  - LCD display showing current levels and statistics
+  - 8-LED NeoPixel strip for instant level indication
+  - Color-coded LED feedback (Green to Red)
 - SD card logging for historical analysis
 
 ## Hardware Requirements
@@ -95,6 +94,11 @@ SD Card Module (SPI):
 Sound Sensor:
   OUT   → GPIO A0 (ADC)
   VCC   → 3.3V
+  GND   → GND
+
+NeoPixel LED Strip:
+  DIN   → GPIO21
+  VCC   → 5V
   GND   → GND
 ```
 

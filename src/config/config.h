@@ -5,30 +5,81 @@
 // Hardware Configuration
 namespace pins
 {
-    // SPI Bus (shared between display and SD)
+// SPI Bus (shared between display and SD)
+#ifndef PIN_MOSI
     constexpr uint8_t MOSI = 11;
-    constexpr uint8_t MISO = 13;
-    constexpr uint8_t SCK = 10;
+#else
+    constexpr uint8_t MOSI = PIN_MOSI;
+#endif
 
-    // Display specific (ST7565 ERC12864)
+#ifndef PIN_MISO
+    constexpr uint8_t MISO = 13;
+#else
+    constexpr uint8_t MISO = PIN_MISO;
+#endif
+
+#ifndef PIN_SCK
+    constexpr uint8_t SCK = 10;
+#else
+    constexpr uint8_t SCK = PIN_SCK;
+#endif
+
+    // Display specific
     namespace display
     {
+#ifndef PIN_DISPLAY_CS
         constexpr uint8_t CS = 19;
+#else
+        constexpr uint8_t CS = PIN_DISPLAY_CS;
+#endif
+
+#ifndef PIN_DISPLAY_DC
         constexpr uint8_t DC = 21;
+#else
+        constexpr uint8_t DC = PIN_DISPLAY_DC;
+#endif
+
+#ifndef PIN_DISPLAY_RESET
         constexpr uint8_t RESET = 20;
+#else
+        constexpr uint8_t RESET = PIN_DISPLAY_RESET;
+#endif
+
+#ifndef PIN_DISPLAY_BACKLIGHT
         constexpr uint8_t BACKLIGHT = 9;
+#else
+        constexpr uint8_t BACKLIGHT = PIN_DISPLAY_BACKLIGHT;
+#endif
     }
 
     // SD Card specific
     namespace sd
     {
+#ifndef PIN_SD_CS
         constexpr uint8_t CS = 34;
+#else
+        constexpr uint8_t CS = PIN_SD_CS;
+#endif
     }
 
     // Analog inputs
     namespace analog
     {
+#ifndef PIN_SOUND_SENSOR
         constexpr uint8_t SOUND = A0;
+#else
+        constexpr uint8_t SOUND = PIN_SOUND_SENSOR;
+#endif
+    }
+
+    // LED Strip
+    namespace led
+    {
+#ifndef PIN_LED_STRIP
+        constexpr uint8_t STRIP = 21;
+#else
+        constexpr uint8_t STRIP = PIN_LED_STRIP;
+#endif
     }
 }
 
@@ -81,5 +132,33 @@ namespace adc_config
         constexpr float VOLTAGE_GAIN = 26.0f;     // Grove sensor gain in dB
         constexpr float MIN_DB = -60.0f;          // Sensor min sensitivity in dBV/Pa
         constexpr float MAX_DB = -56.0f;          // Sensor max sensitivity in dBV/Pa
+    }
+}
+
+// NeoPixel Configuration
+namespace led_config
+{
+#ifndef LED_NUM_PIXELS
+    constexpr uint8_t NUM_PIXELS = 8;
+#else
+    constexpr uint8_t NUM_PIXELS = LED_NUM_PIXELS;
+#endif
+
+    namespace colors
+    {
+        // Macro to calculate the color based on order (NEO_GRB)
+        constexpr uint32_t make_color(uint8_t r, uint8_t g, uint8_t b)
+        {
+            return ((uint32_t)g << 16) | ((uint32_t)r << 8) | b;
+        }
+
+        constexpr uint32_t LEVEL_1 = make_color(0, 255, 0);   // Bright Green
+        constexpr uint32_t LEVEL_2 = make_color(85, 255, 0);  // Yellowish Green
+        constexpr uint32_t LEVEL_3 = make_color(170, 255, 0); // Lime Green
+        constexpr uint32_t LEVEL_4 = make_color(255, 255, 0); // Yellow
+        constexpr uint32_t LEVEL_5 = make_color(255, 170, 0); // Orange-Yellow
+        constexpr uint32_t LEVEL_6 = make_color(255, 85, 0);  // Orange
+        constexpr uint32_t LEVEL_7 = make_color(255, 0, 0);   // Bright Red
+        constexpr uint32_t LEVEL_8 = make_color(128, 0, 0);   // Dark Red
     }
 }

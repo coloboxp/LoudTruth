@@ -5,8 +5,17 @@ class NoiseMonitor {
 -DisplayManager m_display
 -DataLogger m_logger
 -SignalProcessor m_signal_processor
+-LedIndicator m_led_indicator
 +begin()
 +update()
+}
+
+class LedIndicator {
+    -Adafruit_NeoPixel m_pixels
+    -uint32_t[] LEVEL_COLORS
+    +begin()
+    +update()
+    -update_level_display()
 }
 
     class SignalProcessor {
@@ -47,3 +56,6 @@ class NoiseMonitor {
     NoiseMonitor --> DisplayManager
     NoiseMonitor --> DataLogger
     NoiseMonitor --> SoundSensor
+    NoiseMonitor --> LedIndicator
+    LedIndicator ..> SignalProcessor
+```

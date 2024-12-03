@@ -3,6 +3,7 @@ graph TD
     ESP32[ESP32-S3 WROOM] --> |SPI| LCD[LCD Display<br>ST7565 ERC12864]
     ESP32 --> |SPI| SD[SD Card Module]
     ESP32 --> |ADC| SOUND[Sound Sensor]
+    ESP32 --> |Digital| LED[NeoPixel LED Strip]
 
     subgraph SPI Bus
         LCD -.->|MOSI: GPIO11<br>SCK: GPIO10|
@@ -18,5 +19,9 @@ graph TD
 
     subgraph Analog Input
         SOUND -->|OUT: GPIO A0| ESP32
+    end
+
+    subgraph LED Strip
+        LED -->|DIN: GPIO21| ESP32
     end
 ```
