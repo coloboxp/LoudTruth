@@ -1,3 +1,5 @@
+# Timing and Flow
+
 ```mermaid
 sequenceDiagram
     participant M as Main Loop

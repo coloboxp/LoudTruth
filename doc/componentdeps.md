@@ -1,3 +1,5 @@
+# Component Dependencies
+
 ```mermaid
 graph TD
 A[main.cpp] --> B[NoiseMonitor]

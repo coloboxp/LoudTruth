@@ -1,3 +1,5 @@
+# Component Architecture
+
 ```mermaid
 classDiagram
 class NoiseMonitor {

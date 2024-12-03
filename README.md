@@ -7,6 +7,7 @@ An ESP32-based device that monitors ambient noise levels, categorizes them, and 
 1. Install PlatformIO
 2. Connect the hardware according to the [hardware documentation](doc/hw.md)
 3. Build and flash:
+
    ```bash
    pio run -t upload
    ```

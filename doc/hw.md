@@ -1,3 +1,5 @@
+# Hardware Architecture
+
 ```mermaid
 graph TD
     ESP32[ESP32-S3 WROOM] --> |SPI| LCD[LCD Display<br>ST7565 ERC12864]
