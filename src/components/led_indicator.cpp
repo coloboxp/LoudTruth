@@ -49,7 +49,7 @@ void LedIndicator::update_level_display(float noise_level)
     {
         if (i < active_leds)
         {
-            m_pixels.setPixelColor(i, LEVEL_COLORS[i]);
+            m_pixels.setPixelColor(i, led_config::colors::INDICATOR_COLORS[i]);
         }
         else
         {

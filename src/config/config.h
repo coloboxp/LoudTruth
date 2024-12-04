@@ -160,5 +160,16 @@ namespace led_config
         constexpr uint32_t LEVEL_6 = make_color(255, 85, 0);  // Orange
         constexpr uint32_t LEVEL_7 = make_color(255, 0, 0);   // Bright Red
         constexpr uint32_t LEVEL_8 = make_color(128, 0, 0);   // Dark Red
+
+        // Add the array definition here
+        constexpr uint32_t INDICATOR_COLORS[NUM_PIXELS] = {
+            LEVEL_1,
+            LEVEL_2,
+            LEVEL_3,
+            LEVEL_4,
+            LEVEL_5,
+            LEVEL_6,
+            LEVEL_7,
+            LEVEL_8};
     }
 }
