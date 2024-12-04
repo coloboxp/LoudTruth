@@ -11,14 +11,14 @@ class SignalProcessor
 public:
     struct Statistics
     {
-        uint16_t min = 4095;
+        uint16_t min = adc_config::MAX_VALUE;
         uint16_t max = 0;
         float avg = 0;
         uint32_t samples = 0;
 
         void reset()
         {
-            min = 4095;
+            min = adc_config::MAX_VALUE;
             max = 0;
             avg = 0;
             samples = 0;
