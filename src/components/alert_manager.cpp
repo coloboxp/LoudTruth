@@ -27,13 +27,11 @@ void AlertManager::update(const SignalProcessor &signal_processor)
     // Check for state changes
     if (is_currently_elevated && !m_is_elevated)
     {
-        // Noise just became elevated
         m_elevation_start_time = millis();
         m_is_elevated = true;
     }
     else if (!is_currently_elevated)
     {
-        // Reset when noise returns to normal
         m_is_elevated = false;
         m_elevation_start_time = 0;
     }
@@ -65,11 +63,11 @@ void AlertManager::handle_alert()
         for (int i = 0; i < num_beeps; i++)
         {
             for (int j = 0; j < config::alert::ALARM_FREQUENCY / 10; j++)
-            {                                                               // Generate for 100ms
-                digitalWrite(config::alert::SPEAKER_PIN, HIGH);             // Full voltage
-                delayMicroseconds(500000 / config::alert::ALARM_FREQUENCY); // Half period
-                digitalWrite(config::alert::SPEAKER_PIN, LOW);              // Zero voltage
-                delayMicroseconds(500000 / config::alert::ALARM_FREQUENCY); // Half period
+            { // Generate for 100ms
+                digitalWrite(config::alert::SPEAKER_PIN, HIGH);
+                delayMicroseconds(500000 / config::alert::ALARM_FREQUENCY);
+                digitalWrite(config::alert::SPEAKER_PIN, LOW);
+                delayMicroseconds(500000 / config::alert::ALARM_FREQUENCY);
             }
             delay(50); // Gap between beeps
         }
@@ -89,11 +87,7 @@ void AlertManager::start_cooldown()
     m_in_cooldown = true;
     m_cooldown_start_time = millis();
     m_alert_count = 0;
-
-    // Update cooldown duration based on trigger frequency
     update_cooldown_duration();
-
-    // Record this trigger time
     m_last_trigger_time = millis();
 }
 
@@ -101,21 +95,16 @@ void AlertManager::update_cooldown_duration()
 {
     unsigned long current_time = millis();
 
-    // Check if this trigger is within the rapid trigger window
     if (m_last_trigger_time > 0 &&
         (current_time - m_last_trigger_time) < config::alert::RAPID_TRIGGER_WINDOW_MS)
     {
-        // Increase rapid trigger count
         m_rapid_trigger_count++;
-
-        // Increase cooldown duration
         m_current_cooldown_ms = std::min(
             config::alert::MAX_COOLDOWN_MS,
             config::alert::BASE_COOLDOWN_MS * (m_rapid_trigger_count + 1));
     }
     else
     {
-        // Reset if outside rapid trigger window
         m_rapid_trigger_count = 0;
         m_current_cooldown_ms = config::alert::BASE_COOLDOWN_MS;
     }
@@ -130,10 +119,9 @@ bool AlertManager::check_cooldown()
 
     if (millis() - m_cooldown_start_time >= m_current_cooldown_ms)
     {
-        // Cooldown period is over
         m_in_cooldown = false;
         return false;
     }
 
-    return true; // Still in cooldown
+    return true;
 }

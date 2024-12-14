@@ -3,12 +3,13 @@
 /**
  * @brief Constructor for the DisplayManager class.
  */
-DisplayManager::DisplayManager()
+DisplayManager::DisplayManager(const AlertManager &alert_manager)
     : m_u8g2(U8G2_ST7565_ERC12864_ALT_F_4W_HW_SPI(
           U8G2_R0,
           config::hardware::pins::display::CS,
           config::hardware::pins::display::DC,
-          config::hardware::pins::display::RESET))
+          config::hardware::pins::display::RESET)),
+      m_alert_manager(alert_manager)
 {
     memset(m_plot_buffer, 0, sizeof(m_plot_buffer));
 }
@@ -83,34 +84,46 @@ void DisplayManager::draw_stats(const SignalProcessor &signal_processor)
 {
     m_u8g2.setFont(u8g2_font_6x10_tf);
 
-    // Get current value first for immediate feedback
-    const float current_value = signal_processor.get_current_value();
-    const auto noise_category = signal_processor.get_noise_category();
-
-    // Draw current instantaneous noise level and category (as ADC value)
+    // Draw current noise level and category
     char noise_str[32];
-    snprintf(noise_str, sizeof(noise_str), "ADC: %d", static_cast<int>(current_value));
+    snprintf(noise_str, sizeof(noise_str), "ADC: %d",
+             static_cast<int>(signal_processor.get_current_value()));
     m_u8g2.drawStr(0, 10, noise_str);
 
-    // Draw noise category with highlighting for important states
-    const char* category = noise_level_to_string(noise_category);
-    if (noise_category >= SignalProcessor::NoiseLevel::ELEVATED) {
+    // Draw WiFi and ThingSpeak status in top right
+    char status[5] = "    "; // 4 spaces + null terminator
+    if (wifi::WiFiManager::instance().is_connected())
+    {
+        status[0] = 'W';
+    }
+    if (ApiHandler::instance().is_available())
+    {
+        status[2] = 'T';
+    }
+    m_u8g2.drawStr(110, 10, status);
+
+    // Draw noise category
+    const char *category = noise_level_to_string(signal_processor.get_noise_category());
+    if (signal_processor.get_noise_category() >= SignalProcessor::NoiseLevel::ELEVATED)
+    {
         uint8_t category_width = m_u8g2.getStrWidth(category);
         m_u8g2.setDrawColor(1);
         m_u8g2.drawBox(64, 2, category_width, 10);
         m_u8g2.setDrawColor(0);
         m_u8g2.drawStr(64, 10, category);
         m_u8g2.setDrawColor(1);
-    } else {
+    }
+    else
+    {
         m_u8g2.drawStr(64, 10, category);
     }
 
-    // Draw statistics with ADC values
+    // Draw statistics
     const auto &one_min = signal_processor.get_one_min_stats();
     const auto &fifteen_min = signal_processor.get_fifteen_min_stats();
 
     char stats_str[64];
-    
+
     // 1-minute statistics
     snprintf(stats_str, sizeof(stats_str), "1m: %d [%d-%d]",
              static_cast<int>(one_min.avg),
@@ -124,6 +137,16 @@ void DisplayManager::draw_stats(const SignalProcessor &signal_processor)
              fifteen_min.min,
              fifteen_min.max);
     m_u8g2.drawStr(0, 30, stats_str);
+
+    // Draw chart grid and labels
+    m_u8g2.drawHLine(0, 40, 128); // Baseline
+    m_u8g2.drawVLine(0, 40, -30); // Y-axis
+
+    // Draw scale labels
+    char scale_str[8];
+    snprintf(scale_str, sizeof(scale_str), "%d", config::signal_processing::ranges::MAX);
+    m_u8g2.drawStr(2, 42, "0");
+    m_u8g2.drawStr(2, 35, scale_str);
 }
 
 /**
@@ -131,16 +154,17 @@ void DisplayManager::draw_stats(const SignalProcessor &signal_processor)
  */
 void DisplayManager::draw_plot()
 {
+    // Draw the actual plot points with increased sensitivity
     for (int i = 0; i < config::display::plot::PLOT_POINTS - 1; i++)
     {
         int x1 = i * 2;
         int x2 = (i + 1) * 2;
-        int y1 = config::display::plot::PLOT_BASELINE_Y_POSITION -
-                 map(m_plot_buffer[i], 0, config::adc::MAX_VALUE, 0,
-                     config::display::plot::PLOT_HEIGHT);
-        int y2 = config::display::plot::PLOT_BASELINE_Y_POSITION -
-                 map(m_plot_buffer[(i + 1)], 0, config::adc::MAX_VALUE, 0,
-                     config::display::plot::PLOT_HEIGHT);
+        int y1 = map(m_plot_buffer[i], 0, config::signal_processing::ranges::MAX,
+                     config::display::plot::PLOT_BASELINE_Y_POSITION,
+                     config::display::plot::PLOT_BASELINE_Y_POSITION - config::display::plot::PLOT_HEIGHT);
+        int y2 = map(m_plot_buffer[(i + 1)], 0, config::signal_processing::ranges::MAX,
+                     config::display::plot::PLOT_BASELINE_Y_POSITION,
+                     config::display::plot::PLOT_BASELINE_Y_POSITION - config::display::plot::PLOT_HEIGHT);
         m_u8g2.drawLine(x1, y1, x2, y2);
     }
 }
@@ -150,19 +174,19 @@ void DisplayManager::draw_plot()
  * @param level The noise level to convert.
  * @return The noise level as a string.
  */
-const char *DisplayManager::noise_level_to_string(SignalProcessor::NoiseLevel level)
+const char *DisplayManager::noise_level_to_string(SignalProcessor::NoiseLevel level) const
 {
     switch (level)
     {
     case SignalProcessor::NoiseLevel::OK:
         return "OK";
     case SignalProcessor::NoiseLevel::REGULAR:
-        return "REGULAR";
+        return "REG";
     case SignalProcessor::NoiseLevel::ELEVATED:
-        return "ELEVATED";
+        return "HIGH";
     case SignalProcessor::NoiseLevel::CRITICAL:
-        return "CRITICAL";
+        return "CRIT";
     default:
-        return "UNKNOWN";
+        return "???";
     }
 }

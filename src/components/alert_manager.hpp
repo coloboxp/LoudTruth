@@ -8,6 +8,7 @@ public:
     AlertManager();
     void begin();
     void update(const SignalProcessor &signal_processor);
+    bool is_in_cooldown() const { return m_in_cooldown; }
 
 private:
     bool m_is_elevated{false};

@@ -1,7 +1,11 @@
 #include "noise_monitor.hpp"
 #include <time.h>
 
-NoiseMonitor::NoiseMonitor() = default;
+NoiseMonitor::NoiseMonitor()
+    : m_display(m_alert_manager)
+{
+    // Empty constructor - initialization moved to begin()
+}
 
 /**
  * @brief Initialize the noise monitor.
@@ -9,11 +13,23 @@ NoiseMonitor::NoiseMonitor() = default;
  */
 bool NoiseMonitor::begin()
 {
+    // Initialize components one at a time with delays
     m_sound_sensor.begin();
+    delay(100);  // Give ADC time to stabilize
+
     m_display.begin();
+    delay(100);  // Give display time to initialize
+
     m_led_indicator.begin();
+    delay(50);   // Brief delay for LED strip
+
     m_alert_manager.begin();
-    return m_logger.begin();
+    delay(50);   // Brief delay for alert system
+
+    bool logger_ok = m_logger.begin();
+    delay(50);   // Give SD card time to initialize
+
+    return logger_ok;  // Return logger status
 }
 
 /**

@@ -19,6 +19,7 @@ public:
 
     void begin();
     bool send_noise_data(const JsonDocument &doc);
+    bool is_available() const { return m_available; }
 
 private:
     ApiHandler() = default;
