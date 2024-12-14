@@ -78,28 +78,35 @@ ESP32-S3 WROOM Board Layout:
 Connections:
 
 LCD Display (ST7565 ERC12864 - 4-Wire SPI):
-  CS    → GPIO19
-  DC    → GPIO21
-  MOSI  → GPIO11
-  SCK   → GPIO10
-  RESET → GPIO20
-  BL    → GPIO9
+  CS    → GPIO5  (PIN_DISPLAY_CHIP_SELECT)
+  DC    → GPIO16 (PIN_DISPLAY_DATA_COMMAND)
+  MOSI  → GPIO23 (PIN_MOSI, shared with SD card)
+  SCK   → GPIO18 (PIN_SCK, shared with SD card)
+  RESET → GPIO4  (PIN_DISPLAY_RESET)
+  BL    → GPIO2  (PIN_DISPLAY_BACKLIGHT)
 
 SD Card Module (SPI):
-  CS    → GPIO34
-  MOSI  → GPIO11 (shared with display)
-  MISO  → GPIO13
-  SCK   → GPIO10 (shared with display)
+  CS    → GPIO17 (PIN_SD_CS)
+  MOSI  → GPIO23 (PIN_MOSI, shared with display)
+  MISO  → GPIO19 (PIN_MISO)
+  SCK   → GPIO18 (PIN_SCK, shared with display)
+  VCC   → 3.3V
+  GND   → GND
 
 Sound Sensor:
-  OUT   → GPIO A0 (ADC)
+  OUT   → GPIO15 (PIN_SOUND_SENSOR)
   VCC   → 3.3V
   GND   → GND
 
 NeoPixel LED Strip:
-  DIN   → GPIO21
+  DIN   → GPIO21 (PIN_LED_STRIP)
   VCC   → 5V
   GND   → GND
+
+Notes:
+- SPI bus (MOSI, SCK) is shared between the display and SD card
+- All pins are on the right side of the board for better accessibility
+- Power connections (3.3V, 5V, GND) can be connected to any appropriate pins on the board
 ```
 
 ## Data Logging

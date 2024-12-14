@@ -4,10 +4,11 @@
  * @brief Constructor for the DisplayManager class.
  */
 DisplayManager::DisplayManager()
-    : m_u8g2(U8G2_R0,
-             pins::display::CS,
-             pins::display::DC,
-             pins::display::RESET)
+    : m_u8g2(U8G2_ST7565_ERC12864_ALT_F_4W_HW_SPI(
+          U8G2_R0,
+          pins::display::CS,
+          pins::display::DC,
+          pins::display::RESET))
 {
     memset(m_plot_buffer, 0, sizeof(m_plot_buffer));
 }
@@ -17,9 +18,39 @@ DisplayManager::DisplayManager()
  */
 void DisplayManager::begin()
 {
-    m_u8g2.begin();
+    // Reset pin setup
+    pinMode(pins::display::RESET, OUTPUT);
+    digitalWrite(pins::display::RESET, HIGH);
+    delay(1);
+    digitalWrite(pins::display::RESET, LOW); // Reset display
+    delay(10);
+    digitalWrite(pins::display::RESET, HIGH);
+    delay(100); // Wait for reset to complete
+
+    // Initialize display
+    if (!m_u8g2.begin())
+    {
+        Serial.println("Display init failed!");
+        return;
+    }
+    Serial.println("Display initialized");
+
+    // Display setup
+    m_u8g2.setContrast(0x3A); // Using contrast from the GitHub issue
+
+    // Backlight control
     pinMode(pins::display::BACKLIGHT, OUTPUT);
-    digitalWrite(pins::display::BACKLIGHT, HIGH);
+    digitalWrite(pins::display::BACKLIGHT, LOW); // LOW = ON
+
+    // Test pattern
+    m_u8g2.clearBuffer();
+    m_u8g2.drawFrame(0, 0, m_u8g2.getWidth(), m_u8g2.getHeight());
+    m_u8g2.setFont(u8g2_font_ncenB14_tr);
+    m_u8g2.drawStr(0, 20, "Test");
+    m_u8g2.drawLine(0, 0, m_u8g2.getWidth(), m_u8g2.getHeight());
+    m_u8g2.sendBuffer();
+
+    Serial.printf("Display dimensions: %dx%d\n", m_u8g2.getWidth(), m_u8g2.getHeight());
 }
 
 /**

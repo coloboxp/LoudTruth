@@ -27,16 +27,20 @@ namespace pins
     // Display specific
     namespace display
     {
-#ifndef PIN_DISPLAY_CS
+        // Add SPI pins to display namespace
+        constexpr uint8_t MOSI = pins::MOSI; // Use the shared SPI pins
+        constexpr uint8_t SCK = pins::SCK;   // Use the shared SPI pins
+
+#ifndef PIN_DISPLAY_CHIP_SELECT
         constexpr uint8_t CS = 19;
 #else
-        constexpr uint8_t CS = PIN_DISPLAY_CS;
+        constexpr uint8_t CS = PIN_DISPLAY_CHIP_SELECT;
 #endif
 
-#ifndef PIN_DISPLAY_DC
+#ifndef PIN_DISPLAY_DATA_COMMAND
         constexpr uint8_t DC = 21;
 #else
-        constexpr uint8_t DC = PIN_DISPLAY_DC;
+        constexpr uint8_t DC = PIN_DISPLAY_DATA_COMMAND;
 #endif
 
 #ifndef PIN_DISPLAY_RESET
@@ -124,7 +128,7 @@ namespace adc_config
 {
     constexpr uint8_t RESOLUTION_BITS = 12;
     constexpr uint16_t MAX_VALUE = (1 << RESOLUTION_BITS) - 1; // 4095 for 12-bit
-    constexpr uint8_t AVERAGING_SAMPLES = 32;                  // Number of samples to average
+    constexpr uint8_t AVERAGING_SAMPLES = 2;                  // Number of samples to average
 
     namespace sound_sensor
     {

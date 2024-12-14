@@ -16,6 +16,7 @@ LedIndicator::LedIndicator()
 void LedIndicator::begin()
 {
     m_pixels.begin();
+    m_pixels.setBrightness(32);
     m_pixels.clear();
     m_pixels.show();
 }
@@ -49,7 +50,34 @@ void LedIndicator::update_level_display(float noise_level)
     {
         if (i < active_leds)
         {
-            m_pixels.setPixelColor(i, led_config::colors::INDICATOR_COLORS[i]);
+            // Use the predefined color levels
+            switch (i)
+            {
+            case 0:
+                m_pixels.setPixelColor(i, led_config::colors::LEVEL_1);
+                break;
+            case 1:
+                m_pixels.setPixelColor(i, led_config::colors::LEVEL_2);
+                break;
+            case 2:
+                m_pixels.setPixelColor(i, led_config::colors::LEVEL_3);
+                break;
+            case 3:
+                m_pixels.setPixelColor(i, led_config::colors::LEVEL_4);
+                break;
+            case 4:
+                m_pixels.setPixelColor(i, led_config::colors::LEVEL_5);
+                break;
+            case 5:
+                m_pixels.setPixelColor(i, led_config::colors::LEVEL_6);
+                break;
+            case 6:
+                m_pixels.setPixelColor(i, led_config::colors::LEVEL_7);
+                break;
+            case 7:
+                m_pixels.setPixelColor(i, led_config::colors::LEVEL_8);
+                break;
+            }
         }
         else
         {
