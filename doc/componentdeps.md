@@ -16,6 +16,8 @@ F --> G
 J --> G
 
 D --> H[U8G2 Library]
+D --> L[WiFiManager]
+D --> M[ApiHandler]
 E --> I[SD Library]
 J --> K[Adafruit NeoPixel Library]
 ```

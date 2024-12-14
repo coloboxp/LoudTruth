@@ -8,15 +8,19 @@ stateDiagram-v2
 
     state Running {
         [*] --> Sampling
-        Sampling --> Processing: SAMPLE_INTERVAL
+        Sampling --> Processing: SAMPLE_INTERVAL (10ms)
         Processing --> Sampling
 
+        state "LED Update" as LED
+        Sampling --> LED: LED_UPDATE_INTERVAL (50ms)
+        LED --> Sampling
+
         state "Display Update" as DU
-        Sampling --> DU: DISPLAY_INTERVAL
+        Sampling --> DU: DISPLAY_INTERVAL (500ms)
         DU --> Sampling
 
         state "Data Logging" as DL
-        Sampling --> DL: LOG_INTERVAL
+        Sampling --> DL: LOG_INTERVAL (60s)
         DL --> Sampling
     }
 

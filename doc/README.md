@@ -30,11 +30,37 @@ Using Freenove ESP32-S3 WROOM with:
 
 - Real-time noise level monitoring using sound sensor
 - Dynamic noise categorization using Exponential Moving Average (EMA)
+- Independent statistics tracking:
+  - 1-minute window
+  - 15-minute window
+  - 24-hour window
 - Visual feedback through:
-  - LCD display showing current levels and statistics
-  - 8-LED NeoPixel strip for instant level indication
+  - LCD display showing current levels and statistics (500ms refresh)
+  - 8-LED NeoPixel strip for instant level indication (50ms refresh)
   - Color-coded LED feedback (Green to Red)
+  - WiFi and ThingSpeak connection status indicators
 - SD card logging for historical analysis
+- ThingSpeak integration for remote monitoring
+
+## Recent Technical Changes
+
+### Display System
+
+- Decoupled display refresh (500ms) from LED updates (50ms)
+- Added connection status indicators for WiFi and ThingSpeak
+- Improved display initialization sequence
+
+### Statistics Processing
+
+- Independent time windows for 1-min, 15-min, and daily statistics
+- Improved average calculation to prevent overflow
+- Updated min/max value handling using hardware ADC maximum
+
+### System Stability
+
+- Enhanced initialization sequence with proper delays
+- Improved watchdog timer handling
+- Optimized memory usage in statistics tracking
 
 ## Hardware Requirements
 

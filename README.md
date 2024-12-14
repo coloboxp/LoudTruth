@@ -18,8 +18,28 @@ An ESP32-based device that monitors ambient noise levels, categorizes them, and 
 - Dynamic noise categorization using Exponential Moving Average (EMA)
 - 32-sample averaging for improved noise reduction
 - LCD display with current levels and statistics
+- WiFi connectivity status indicator
+- ThingSpeak integration for remote monitoring
+- Independent statistics tracking for 1-min, 15-min, and daily periods
+- LED strip with fast response time (50ms updates)
 - SD card logging for data analysis
 - Configurable thresholds and parameters
+
+## Recent Updates
+
+### Display and Performance Improvements
+
+- Separated LED indicator refresh (50ms) from display updates (500ms)
+- Added WiFi and ThingSpeak connection status indicators
+- Improved statistics tracking with independent time windows
+- Optimized initialization sequence to prevent watchdog resets
+
+### Technical Improvements
+
+- Updated ADC value handling to use hardware maximum
+- Improved statistics tracking accuracy
+- Enhanced system stability with proper component initialization
+- Added independent time windows for statistics collection
 
 ## Documentation
 
