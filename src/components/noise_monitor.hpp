@@ -28,6 +28,7 @@ private:
 
     unsigned long m_last_sample_time{0};
     unsigned long m_last_display_time{0};
+    unsigned long m_last_led_time{0};
     unsigned long m_last_log_time{0};
     unsigned long m_last_api_time{0};
 

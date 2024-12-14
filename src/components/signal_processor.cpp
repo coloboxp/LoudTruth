@@ -20,7 +20,10 @@ void SignalProcessor::process_sample(uint16_t raw_value)
     m_baseline_ema = (config::signal_processing::BASELINE_ALPHA * m_ema_value) +
                      ((1.0f - config::signal_processing::BASELINE_ALPHA) * m_baseline_ema);
 
-    // Update statistics with the EMA value
+    // Update each statistic window independently
+    unsigned long current_time = millis();
+
+    // Update statistics for each time window
     update_statistics(m_one_min_stats, m_ema_value);
     update_statistics(m_fifteen_min_stats, m_ema_value);
     update_statistics(m_daily_stats, m_ema_value);
@@ -52,12 +55,12 @@ void SignalProcessor::update_ema(uint16_t raw_value)
  */
 void SignalProcessor::update_statistics(Statistics &stats, float value)
 {
-    // Reset statistics if too old
     unsigned long current_time = millis();
+
+    // Reset if window has expired
     if (current_time - stats.last_update > stats.window_size)
     {
-        stats.min = value;
-        stats.max = value;
+        stats.min = stats.max = static_cast<uint16_t>(value);
         stats.avg = value;
         stats.samples = 1;
     }

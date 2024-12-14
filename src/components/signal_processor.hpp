@@ -24,9 +24,9 @@ public:
         float avg{0};
         uint32_t samples{0};
         unsigned long last_update{0};
-        uint32_t window_size{0};
+        uint32_t window_size;
 
-        Statistics(uint32_t window_ms = 60000) : window_size(window_ms) {}
+        Statistics(uint32_t window_ms) : window_size(window_ms) {}
     };
 
     SignalProcessor();

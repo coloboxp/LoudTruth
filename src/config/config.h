@@ -131,9 +131,10 @@ namespace config
 
     namespace timing
     {
-        constexpr uint32_t SAMPLE_INTERVAL = 10;   // 10ms between samples
-        constexpr uint32_t DISPLAY_INTERVAL = 500; // Change from 250ms to 500ms
-        constexpr uint32_t LOG_INTERVAL = 60000;   // Keep this the same
+        constexpr uint32_t SAMPLE_INTERVAL = 10;     // 10ms between samples
+        constexpr uint32_t DISPLAY_INTERVAL = 500;   // Change from 250ms to 500ms
+        constexpr uint32_t LED_UPDATE_INTERVAL = 50; // 50ms for LED updates
+        constexpr uint32_t LOG_INTERVAL = 60000;     // Keep this the same
     }
 
     namespace display

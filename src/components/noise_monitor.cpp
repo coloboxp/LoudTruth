@@ -15,21 +15,21 @@ bool NoiseMonitor::begin()
 {
     // Initialize components one at a time with delays
     m_sound_sensor.begin();
-    delay(100);  // Give ADC time to stabilize
+    delay(100); // Give ADC time to stabilize
 
     m_display.begin();
-    delay(100);  // Give display time to initialize
+    delay(100); // Give display time to initialize
 
     m_led_indicator.begin();
-    delay(50);   // Brief delay for LED strip
+    delay(50); // Brief delay for LED strip
 
     m_alert_manager.begin();
-    delay(50);   // Brief delay for alert system
+    delay(50); // Brief delay for alert system
 
     bool logger_ok = m_logger.begin();
-    delay(50);   // Give SD card time to initialize
+    delay(50); // Give SD card time to initialize
 
-    return logger_ok;  // Return logger status
+    return logger_ok; // Return logger status
 }
 
 /**
@@ -75,11 +75,18 @@ void NoiseMonitor::handle_display()
 {
     unsigned long current_time = millis();
 
+    // Update display at slower rate
     if (current_time - m_last_display_time >= config::timing::DISPLAY_INTERVAL)
     {
         m_display.update(m_signal_processor);
-        m_led_indicator.update(m_signal_processor);
         m_last_display_time = current_time;
+    }
+
+    // Update LED indicator at faster rate
+    if (current_time - m_last_led_time >= config::timing::LED_UPDATE_INTERVAL)
+    {
+        m_led_indicator.update(m_signal_processor);
+        m_last_led_time = current_time;
     }
 }
 
