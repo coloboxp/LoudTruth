@@ -48,7 +48,6 @@ void DisplayManager::begin()
     m_u8g2.drawFrame(0, 0, m_u8g2.getWidth(), m_u8g2.getHeight());
     m_u8g2.setFont(u8g2_font_ncenB14_tr);
     m_u8g2.drawStr(0, 20, "Zoo Decibel");
-    m_u8g2.drawLine(0, 0, m_u8g2.getWidth(), m_u8g2.getHeight());
     m_u8g2.sendBuffer();
 
     Serial.printf("Display dimensions: %dx%d\n", m_u8g2.getWidth(), m_u8g2.getHeight());
@@ -118,35 +117,26 @@ void DisplayManager::draw_stats(const SignalProcessor &signal_processor)
         m_u8g2.drawStr(64, 10, category);
     }
 
-    // Draw statistics
+    // Draw statistics with proper alignment
     const auto &one_min = signal_processor.get_one_min_stats();
     const auto &fifteen_min = signal_processor.get_fifteen_min_stats();
 
-    char stats_str[64];
-
-    // 1-minute statistics
-    snprintf(stats_str, sizeof(stats_str), "1m: %d [%d-%d]",
+    char stats_str[32];
+    snprintf(stats_str, sizeof(stats_str), "1m:  %4d [%4d-%4d]",
              static_cast<int>(one_min.avg),
              one_min.min,
              one_min.max);
     m_u8g2.drawStr(0, 20, stats_str);
 
-    // 15-minute statistics
-    snprintf(stats_str, sizeof(stats_str), "15m: %d [%d-%d]",
+    snprintf(stats_str, sizeof(stats_str), "15m: %4d [%4d-%4d]",
              static_cast<int>(fifteen_min.avg),
              fifteen_min.min,
              fifteen_min.max);
     m_u8g2.drawStr(0, 30, stats_str);
 
-    // Draw chart grid and labels
-    m_u8g2.drawHLine(0, 40, 128); // Baseline
-    m_u8g2.drawVLine(0, 40, -30); // Y-axis
-
-    // Draw scale labels
-    char scale_str[8];
-    snprintf(scale_str, sizeof(scale_str), "%d", config::signal_processing::ranges::MAX);
-    m_u8g2.drawStr(2, 42, "0");
-    m_u8g2.drawStr(2, 35, scale_str);
+    // // Draw chart grid and labels
+    // m_u8g2.drawHLine(0, 40, 128); // Baseline
+    // m_u8g2.drawVLine(0, 40, -30); // Y-axis
 }
 
 /**
@@ -159,12 +149,18 @@ void DisplayManager::draw_plot()
     {
         int x1 = i * 2;
         int x2 = (i + 1) * 2;
+
+        // Shows the value of the plot buffer as a line on the display
         int y1 = map(m_plot_buffer[i], 0, config::signal_processing::ranges::MAX,
                      config::display::plot::PLOT_BASELINE_Y_POSITION,
                      config::display::plot::PLOT_BASELINE_Y_POSITION - config::display::plot::PLOT_HEIGHT);
+
+        // Draws a line between the current and next point
         int y2 = map(m_plot_buffer[(i + 1)], 0, config::signal_processing::ranges::MAX,
                      config::display::plot::PLOT_BASELINE_Y_POSITION,
                      config::display::plot::PLOT_BASELINE_Y_POSITION - config::display::plot::PLOT_HEIGHT);
+
+        // Draws the line between the current and next point
         m_u8g2.drawLine(x1, y1, x2, y2);
     }
 }
