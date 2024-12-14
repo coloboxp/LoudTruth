@@ -11,6 +11,7 @@ bool NoiseMonitor::begin()
     m_sound_sensor.begin();
     m_display.begin();
     m_led_indicator.begin();
+    m_alert_manager.begin();
     return m_logger.begin();
 }
 
@@ -25,6 +26,9 @@ void NoiseMonitor::update()
     handle_sampling();
     handle_display();
     handle_logging();
+
+    // Update alert manager
+    m_alert_manager.update(m_signal_processor);
 }
 
 /**

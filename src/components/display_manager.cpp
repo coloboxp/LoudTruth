@@ -46,7 +46,7 @@ void DisplayManager::begin()
     m_u8g2.clearBuffer();
     m_u8g2.drawFrame(0, 0, m_u8g2.getWidth(), m_u8g2.getHeight());
     m_u8g2.setFont(u8g2_font_ncenB14_tr);
-    m_u8g2.drawStr(0, 20, "Test");
+    m_u8g2.drawStr(0, 20, "Zoo Decibel");
     m_u8g2.drawLine(0, 0, m_u8g2.getWidth(), m_u8g2.getHeight());
     m_u8g2.sendBuffer();
 

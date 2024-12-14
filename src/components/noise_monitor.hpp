@@ -5,6 +5,7 @@
 #include "data_logger.hpp"
 #include "signal_processor.hpp"
 #include "led_indicator.hpp"
+#include "alert_manager.hpp"
 /**
  * @brief Class representing the noise monitor.
  */
@@ -21,6 +22,7 @@ private:
     DataLogger m_logger;
     SignalProcessor m_signal_processor;
     LedIndicator m_led_indicator;
+    AlertManager m_alert_manager;
 
     unsigned long m_last_sample_time{0};
     unsigned long m_last_display_time{0};

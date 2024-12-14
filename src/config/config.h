@@ -91,15 +91,24 @@ namespace pins
 namespace signal_processing
 {
     // EMA Configuration
-    constexpr float EMA_ALPHA = 0.1f;        // Fast response for current noise
-    constexpr float BASELINE_ALPHA = 0.001f; // Slow response for baseline
+    constexpr float EMA_ALPHA = 0.5f;       // Increased from 0.2 for much faster response
+    constexpr float BASELINE_ALPHA = 0.01f; // Increased from 0.001 for faster baseline adaptation
 
-    // Noise Categories (multipliers above baseline)
+    // Noise level ranges (adjusted to be more sensitive)
+    namespace ranges
+    {
+        constexpr uint16_t QUIET = 500;    // Base level (green)
+        constexpr uint16_t MODERATE = 700; // Lowered from 1000
+        constexpr uint16_t LOUD = 1000;    // Lowered from 1500
+        constexpr uint16_t MAX = 1300;     // Lowered from 1823
+    }
+
+    // Noise Categories (more sensitive thresholds)
     namespace thresholds
     {
-        constexpr float NOISE_REGULAR = 1.5f; // 50% above baseline
-        constexpr float NOISE_HIGH = 2.0f;    // 100% above baseline
-        constexpr float NOISE_TOXIC = 3.0f;   // 200% above baseline
+        constexpr float NOISE_REGULAR = 1.1f; // 10% above baseline (was 1.2)
+        constexpr float NOISE_HIGH = 1.3f;    // 30% above baseline (was 1.5)
+        constexpr float NOISE_TOXIC = 1.5f;   // 50% above baseline (was 2.0)
     }
 }
 
@@ -128,7 +137,7 @@ namespace adc_config
 {
     constexpr uint8_t RESOLUTION_BITS = 12;
     constexpr uint16_t MAX_VALUE = (1 << RESOLUTION_BITS) - 1; // 4095 for 12-bit
-    constexpr uint8_t AVERAGING_SAMPLES = 2;                  // Number of samples to average
+    constexpr uint8_t AVERAGING_SAMPLES = 1;                   // Number of samples to average
 
     namespace sound_sensor
     {
@@ -165,15 +174,37 @@ namespace led_config
         constexpr uint32_t LEVEL_7 = make_color(255, 0, 0);   // Bright Red
         constexpr uint32_t LEVEL_8 = make_color(128, 0, 0);   // Dark Red
 
-        // Add the array definition here
+        // Colors from green to red (explicitly ordered)
         constexpr uint32_t INDICATOR_COLORS[NUM_PIXELS] = {
-            LEVEL_1,
-            LEVEL_2,
-            LEVEL_3,
-            LEVEL_4,
-            LEVEL_5,
-            LEVEL_6,
-            LEVEL_7,
-            LEVEL_8};
+            make_color(128, 0, 0),   // Dark Red
+            make_color(255, 0, 0),   // Bright Red
+            make_color(255, 85, 0),  // Orange
+            make_color(255, 170, 0), // Orange-Yellow
+            make_color(255, 255, 0), // Yellow
+            make_color(170, 255, 0), // Yellow-Green
+            make_color(85, 255, 0),  // Light Green
+            make_color(0, 255, 0)    // Pure Green
+        };
     }
+}
+
+// Alert Configuration
+namespace alert
+{
+#ifndef SPEAKER_PIN
+    constexpr uint8_t SPEAKER_PIN = 26;
+#else
+    constexpr uint8_t SPEAKER_PIN = PIN_SPEAKER;
+#endif
+    constexpr uint32_t ELEVATED_THRESHOLD_MS = 5000;     // 5 seconds
+    constexpr uint32_t BEEP_DURATION_MS = 200;           // 200ms beep
+    constexpr uint32_t BEEP_INTERVAL_MS = 1000;          // 1 second between beeps
+    constexpr uint8_t MAX_ALERTS = 3;                    // Maximum number of alerts
+    constexpr uint32_t BASE_COOLDOWN_MS = 10000;         // 10 second base cooldown
+    constexpr uint32_t MAX_COOLDOWN_MS = 60000;          // Maximum 1 minute cooldown
+    constexpr uint32_t RAPID_TRIGGER_WINDOW_MS = 120000; // 2 minute window to check for frequent triggers
+
+    // Alarm sound parameters
+    constexpr uint16_t ALARM_FREQUENCY = 2500;   // More piercing frequency
+    constexpr uint16_t ALARM_FREQUENCY_2 = 3000; // Second frequency for alternating tone
 }

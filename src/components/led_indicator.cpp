@@ -37,47 +37,34 @@ void LedIndicator::update(const SignalProcessor &signal_processor)
  */
 void LedIndicator::update_level_display(float noise_level)
 {
-    // Calculate how many LEDs to light based on noise level
-    float normalized_level = noise_level / adc_config::MAX_VALUE;
-    int active_leds = static_cast<int>(normalized_level * led_config::NUM_PIXELS);
+    // More sensitive thresholds for each LED
+    constexpr uint16_t thresholds[led_config::NUM_PIXELS] = {
+        signal_processing::ranges::QUIET,          // LED 0 (green) - 500
+        signal_processing::ranges::QUIET + 100,    // LED 1 - 600
+        signal_processing::ranges::MODERATE,       // LED 2 - 700
+        signal_processing::ranges::MODERATE + 100, // LED 3 - 800
+        signal_processing::ranges::MODERATE + 200, // LED 4 - 900
+        signal_processing::ranges::LOUD,           // LED 5 - 1000
+        signal_processing::ranges::LOUD + 150,     // LED 6 - 1150
+        signal_processing::ranges::MAX             // LED 7 - 1300
+    };
 
-    // Ensure bounds
-    active_leds = std::min(active_leds, static_cast<int>(led_config::NUM_PIXELS));
-    active_leds = std::max(active_leds, 0);
+    // Calculate how many LEDs should be on, starting from LED 0
+    int active_leds = 1; // Always show at least the first (green) LED for normal levels
+    for (int i = 1; i < led_config::NUM_PIXELS; i++)
+    {
+        if (noise_level >= thresholds[i])
+        {
+            active_leds = i + 1;
+        }
+    }
 
-    // Update LED colors
+    // Update LED colors - normal order, starting from 0
     for (int i = 0; i < led_config::NUM_PIXELS; i++)
     {
         if (i < active_leds)
         {
-            // Use the predefined color levels
-            switch (i)
-            {
-            case 0:
-                m_pixels.setPixelColor(i, led_config::colors::LEVEL_1);
-                break;
-            case 1:
-                m_pixels.setPixelColor(i, led_config::colors::LEVEL_2);
-                break;
-            case 2:
-                m_pixels.setPixelColor(i, led_config::colors::LEVEL_3);
-                break;
-            case 3:
-                m_pixels.setPixelColor(i, led_config::colors::LEVEL_4);
-                break;
-            case 4:
-                m_pixels.setPixelColor(i, led_config::colors::LEVEL_5);
-                break;
-            case 5:
-                m_pixels.setPixelColor(i, led_config::colors::LEVEL_6);
-                break;
-            case 6:
-                m_pixels.setPixelColor(i, led_config::colors::LEVEL_7);
-                break;
-            case 7:
-                m_pixels.setPixelColor(i, led_config::colors::LEVEL_8);
-                break;
-            }
+            m_pixels.setPixelColor(i, led_config::colors::INDICATOR_COLORS[i]);
         }
         else
         {

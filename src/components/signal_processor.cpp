@@ -52,13 +52,14 @@ void SignalProcessor::update_statistics(Statistics &stats, float value)
  */
 SignalProcessor::NoiseLevel SignalProcessor::get_noise_category() const
 {
-    float ratio = m_ema_value / m_baseline_ema;
+    // Use absolute values instead of ratios
+    float current = m_ema_value;
 
-    if (ratio < signal_processing::thresholds::NOISE_REGULAR)
+    if (current < signal_processing::ranges::QUIET)
         return NoiseLevel::OK;
-    if (ratio < signal_processing::thresholds::NOISE_HIGH)
+    if (current < signal_processing::ranges::MODERATE)
         return NoiseLevel::REGULAR;
-    if (ratio < signal_processing::thresholds::NOISE_TOXIC)
+    if (current < signal_processing::ranges::LOUD)
         return NoiseLevel::ELEVATED;
     return NoiseLevel::CRITICAL;
 }
