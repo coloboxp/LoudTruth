@@ -65,75 +65,23 @@ Using Freenove ESP32-S3 WROOM with:
 ## Hardware Requirements
 
 - Freenove ESP32-S3 WROOM
-- Sound sensor module
+- Sound sensor module (12-bit ADC input)
 - 128x64 LCD Display (ST7565 ERC12864)
 - Micro SD Card module
 - Micro SD Card (FAT32 formatted)
+- 8-LED NeoPixel strip
+- Piezo speaker for alerts
 
 ## Pin Connections
 
-```
-ESP32-S3 WROOM Board Layout:
+See [connections.md](connections.md) for detailed wiring diagram.
 
-                  ┌──────────────────┐
-                  │       USB        │
-                  └──────────────────┘
-                  ┌──────────────────┐
-              3V3 │ ○             ○ │ GND
-              RST │ ○             ○ │ U0T
-              4   │ ○             ○ │ U0R
-              5   │ ○             ○ │ 6
-              7   │ ○             ○ │ 8
-              9   │ ○  ESP32-S3   ○ │ 10
-              11  │ ○   WROOM     ○ │ 12
-              13  │ ○             ○ │ 14
-              15  │ ○             ○ │ 16
-              17  │ ○             ○ │ 18
-              19  │ ○             ○ │ 20
-              21  │ ○             ○ │ 34
-              35  │ ○             ○ │ 36
-              37  │ ○             ○ │ 38
-              39  │ ○             ○ │ 40
-              41  │ ○             ○ │ 42
-              43  │ ○             ○ │ 44
-              45  │ ○             ○ │ 46
-              47  │ ○             ○ │ 48
-              GND │ ○             ○ │ 5V
-                  └──────────────────┘
+Key Connections:
 
-Connections:
-
-LCD Display (ST7565 ERC12864 - 4-Wire SPI):
-  CS    → GPIO5  (PIN_DISPLAY_CHIP_SELECT)
-  DC    → GPIO16 (PIN_DISPLAY_DATA_COMMAND)
-  MOSI  → GPIO23 (PIN_MOSI, shared with SD card)
-  SCK   → GPIO18 (PIN_SCK, shared with SD card)
-  RESET → GPIO4  (PIN_DISPLAY_RESET)
-  BL    → GPIO2  (PIN_DISPLAY_BACKLIGHT)
-
-SD Card Module (SPI):
-  CS    → GPIO17 (PIN_SD_CS)
-  MOSI  → GPIO23 (PIN_MOSI, shared with display)
-  MISO  → GPIO19 (PIN_MISO)
-  SCK   → GPIO18 (PIN_SCK, shared with display)
-  VCC   → 3.3V
-  GND   → GND
-
-Sound Sensor:
-  OUT   → GPIO15 (PIN_SOUND_SENSOR)
-  VCC   → 3.3V
-  GND   → GND
-
-NeoPixel LED Strip:
-  DIN   → GPIO21 (PIN_LED_STRIP)
-  VCC   → 5V
-  GND   → GND
-
-Notes:
-- SPI bus (MOSI, SCK) is shared between the display and SD card
-- All pins are on the right side of the board for better accessibility
-- Power connections (3.3V, 5V, GND) can be connected to any appropriate pins on the board
-```
+- Sound Sensor: GPIO36 (ADC1_CH0)
+- NeoPixel Strip: GPIO21
+- Piezo Speaker: GPIO26
+- Display and SD card share SPI bus (MOSI: GPIO23, SCK: GPIO18)
 
 ## Data Logging
 

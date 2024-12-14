@@ -14,9 +14,9 @@ An ESP32-based device that monitors ambient noise levels, categorizes them, and 
 
 ## Features
 
-- Real-time noise level monitoring with 12-bit ADC resolution
+- Real-time noise level monitoring with 12-bit ADC resolution (0-4095)
 - Dynamic noise categorization using Exponential Moving Average (EMA)
-- 32-sample averaging for improved noise reduction
+- Single-sample processing for fastest response time
 - LCD display with current levels and statistics
 - WiFi connectivity status indicator
 - ThingSpeak integration for remote monitoring
@@ -24,6 +24,7 @@ An ESP32-based device that monitors ambient noise levels, categorizes them, and 
 - LED strip with fast response time (50ms updates)
 - SD card logging for data analysis
 - Configurable thresholds and parameters
+- Audio alerts for elevated noise levels
 
 ## Recent Updates
 
@@ -33,13 +34,15 @@ An ESP32-based device that monitors ambient noise levels, categorizes them, and 
 - Added WiFi and ThingSpeak connection status indicators
 - Improved statistics tracking with independent time windows
 - Optimized initialization sequence to prevent watchdog resets
+- Removed redundant display elements for better readability
 
 ### Technical Improvements
 
-- Updated ADC value handling to use hardware maximum
+- Updated ADC value handling to use hardware maximum (4095)
 - Improved statistics tracking accuracy
 - Enhanced system stability with proper component initialization
 - Added independent time windows for statistics collection
+- Optimized sound sampling for fastest response
 
 ## Documentation
 
@@ -53,16 +56,19 @@ Detailed documentation is available in the [doc](doc/) directory:
 - [Flow and Timing](doc/flowNtiming.md)
 - [State Management](doc/state.md)
 - [Component Dependencies](doc/componentdeps.md)
+- [Connections](doc/connections.md)
 
 ## Hardware Support
 
 This project is specifically configured for the Freenove ESP32-S3 WROOM board with:
 
-- 8MB Flash
-- 8MB PSRAM
-- USB-CDC enabled
-- 12-bit ADC resolution
+- 4MB Flash
+- 512KB RAM
+- 12-bit ADC resolution (0-4095)
 - Optimized ADC settings for sound measurement
+- Sound sensor on GPIO36
+- NeoPixel strip on GPIO21
+- Speaker on GPIO26
 
 ## License
 
