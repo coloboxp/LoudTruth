@@ -13,7 +13,7 @@ public:
     void begin();
 
     // Takes multiple samples and returns their average
-    uint16_t read_averaged_sample(uint8_t num_samples = adc_config::AVERAGING_SAMPLES);
+    uint16_t read_averaged_sample(uint8_t num_samples = config::adc::AVERAGING_SAMPLES);
 
 private:
     void configure_adc();

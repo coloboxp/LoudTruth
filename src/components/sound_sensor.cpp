@@ -14,15 +14,17 @@ void SoundSensor::begin()
 void SoundSensor::configure_adc()
 {
     // Configure ADC for 12-bit resolution
-    analogReadResolution(adc_config::RESOLUTION_BITS);
+    analogReadResolution(config::adc::RESOLUTION_BITS);
 
-    // Set attenuation for 3.3V max voltage
-    analogSetAttenuation(ADC_11db);
+    // Set attenuation to 0db for maximum sensitivity
+    analogSetAttenuation(ADC_0db);
 
-// Enable ADC calibration if available
-#if defined(ESP32)
-    analogSetClockDiv(1); // Set ADC clock divider
-#endif
+    // Optimize ADC for fast sampling
+    analogSetClockDiv(1); // Fastest ADC clock
+    analogSetWidth(12);   // Ensure 12-bit resolution
+
+    // Set pin-specific attenuation
+    analogSetPinAttenuation(config::hardware::pins::analog::SOUND_SENSOR, ADC_0db);
 }
 
 /**
@@ -33,12 +35,16 @@ void SoundSensor::configure_adc()
 uint16_t SoundSensor::read_averaged_sample(uint8_t num_samples)
 {
     uint32_t sum = 0;
+    uint16_t max_value = 0;
 
-    // Read multiple samples and average them
+    // Take multiple rapid samples and track max
     for (uint8_t i = 0; i < num_samples; i++)
     {
-        sum += analogRead(pins::analog::SOUND);
+        uint16_t sample = analogRead(config::hardware::pins::analog::SOUND_SENSOR);
+        sum += sample;
+        max_value = max(max_value, sample);
     }
 
-    return sum / num_samples;
+    // Return the maximum value for better peak detection
+    return max_value;
 }

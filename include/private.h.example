@@ -1,0 +1,22 @@
+#pragma once
+
+// Rename it to private.h and fill in the correct information
+// Do not commit this file to the repository or your credentials will be exposed!
+
+#define WIFI_SSID "your_wifi_ssid"
+#define WIFI_PASS "your_wifi_password"
+
+#define MQTT_USERNAME "your_mqtt_username"
+#define MQTT_PASSWORD "your_mqtt_password"
+#define MQTT_CLIENT_ID "your_mqtt_client"
+#define MQTT_FEED_PREFIX "your_mqtt_prefix"
+
+#define AIO_USERNAME "your_adafruit_username"
+#define AIO_KEY "your_adafruit_io_key"
+#define API_PATH "https://io.adafruit.com/api/v2/your_username/groups/your_group"
+
+#define THINGSPEAK_NOISE_API_KEY "your_thingspeak_noise_api_key"
+#define THINGSPEAK_USER_API_KEY "your_thingspeak_user_api_key"
+#define THINGSPEAK_ALERTS_API_KEY "your_thingspeak_alerts_api_key"
+
+#define THINGSPEAK_NOISE_CHANNEL_ID "your_thingspeak_channel_id"

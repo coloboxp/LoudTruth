@@ -9,28 +9,24 @@
 class SignalProcessor
 {
 public:
-    struct Statistics
-    {
-        uint16_t min = adc_config::MAX_VALUE;
-        uint16_t max = 0;
-        float avg = 0;
-        uint32_t samples = 0;
-
-        void reset()
-        {
-            min = adc_config::MAX_VALUE;
-            max = 0;
-            avg = 0;
-            samples = 0;
-        }
-    };
-
     enum class NoiseLevel
     {
         OK,
         REGULAR,
         ELEVATED,
         CRITICAL
+    };
+
+    struct Statistics
+    {
+        uint16_t min{UINT16_MAX};
+        uint16_t max{0};
+        float avg{0};
+        uint32_t samples{0};
+        unsigned long last_update{0};
+        uint32_t window_size{0};
+
+        Statistics(uint32_t window_ms = 60000) : window_size(window_ms) {}
     };
 
     SignalProcessor();
@@ -48,9 +44,9 @@ private:
     float m_ema_value{0.0f};
     float m_baseline_ema{0.0f};
 
-    Statistics m_one_min_stats;
-    Statistics m_fifteen_min_stats;
-    Statistics m_daily_stats;
+    Statistics m_one_min_stats{60000};
+    Statistics m_fifteen_min_stats{900000};
+    Statistics m_daily_stats{86400000};
 
     void update_ema(uint16_t raw_value);
     void update_statistics(Statistics &stats, float value);

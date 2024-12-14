@@ -1,8 +1,9 @@
 #pragma once
 
+#include <Arduino.h>
 #include <SD.h>
-#include "config/config.h"
 #include "signal_processor.hpp"
+#include "config/config.h"
 
 /**
  * @brief Class representing the data logger.
@@ -15,7 +16,9 @@ public:
     bool log_data(const SignalProcessor &signal_processor);
 
 private:
-    static constexpr const char *FILENAME = "/noise_log.csv";
-    bool create_headers();
     bool m_initialized{false};
+    uint16_t m_file_counter{0};  // For fallback filename generation
+
+    String get_current_filename();
+    bool create_headers(const String& filename);
 };

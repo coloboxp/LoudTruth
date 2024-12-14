@@ -8,7 +8,19 @@ SignalProcessor::SignalProcessor() = default;
  */
 void SignalProcessor::process_sample(uint16_t raw_value)
 {
-    update_ema(raw_value);
+    // Update current value immediately
+    m_ema_value = (config::signal_processing::EMA_ALPHA * raw_value) +
+                  ((1.0f - config::signal_processing::EMA_ALPHA) * m_ema_value);
+
+    // Update baseline more slowly
+    if (m_baseline_ema == 0)
+    {
+        m_baseline_ema = m_ema_value;
+    }
+    m_baseline_ema = (config::signal_processing::BASELINE_ALPHA * m_ema_value) +
+                     ((1.0f - config::signal_processing::BASELINE_ALPHA) * m_baseline_ema);
+
+    // Update statistics with the EMA value
     update_statistics(m_one_min_stats, m_ema_value);
     update_statistics(m_fifteen_min_stats, m_ema_value);
     update_statistics(m_daily_stats, m_ema_value);
@@ -21,16 +33,16 @@ void SignalProcessor::process_sample(uint16_t raw_value)
 void SignalProcessor::update_ema(uint16_t raw_value)
 {
     // Calculate fast EMA for current noise
-    m_ema_value = (signal_processing::EMA_ALPHA * raw_value) +
-                  ((1.0f - signal_processing::EMA_ALPHA) * m_ema_value);
+    m_ema_value = (config::signal_processing::EMA_ALPHA * raw_value) +
+                  ((1.0f - config::signal_processing::EMA_ALPHA) * m_ema_value);
 
     // Update baseline (very slow EMA)
     if (m_baseline_ema == 0)
     {
         m_baseline_ema = m_ema_value; // Initialize baseline
     }
-    m_baseline_ema = (signal_processing::BASELINE_ALPHA * m_ema_value) +
-                     ((1.0f - signal_processing::BASELINE_ALPHA) * m_baseline_ema);
+    m_baseline_ema = (config::signal_processing::BASELINE_ALPHA * m_ema_value) +
+                     ((1.0f - config::signal_processing::BASELINE_ALPHA) * m_baseline_ema);
 }
 
 /**
@@ -40,10 +52,24 @@ void SignalProcessor::update_ema(uint16_t raw_value)
  */
 void SignalProcessor::update_statistics(Statistics &stats, float value)
 {
-    stats.min = std::min(stats.min, static_cast<uint16_t>(value));
-    stats.max = std::max(stats.max, static_cast<uint16_t>(value));
-    stats.avg = ((stats.avg * stats.samples) + value) / (stats.samples + 1);
-    stats.samples++;
+    // Reset statistics if too old
+    unsigned long current_time = millis();
+    if (current_time - stats.last_update > stats.window_size)
+    {
+        stats.min = value;
+        stats.max = value;
+        stats.avg = value;
+        stats.samples = 1;
+    }
+    else
+    {
+        stats.min = std::min(stats.min, static_cast<uint16_t>(value));
+        stats.max = std::max(stats.max, static_cast<uint16_t>(value));
+        // Weighted average to prevent overflow
+        stats.avg = (stats.avg * 0.95f) + (value * 0.05f);
+        stats.samples++;
+    }
+    stats.last_update = current_time;
 }
 
 /**
@@ -55,11 +81,11 @@ SignalProcessor::NoiseLevel SignalProcessor::get_noise_category() const
     // Use absolute values instead of ratios
     float current = m_ema_value;
 
-    if (current < signal_processing::ranges::QUIET)
+    if (current < config::signal_processing::ranges::QUIET)
         return NoiseLevel::OK;
-    if (current < signal_processing::ranges::MODERATE)
+    if (current < config::signal_processing::ranges::MODERATE)
         return NoiseLevel::REGULAR;
-    if (current < signal_processing::ranges::LOUD)
+    if (current < config::signal_processing::ranges::LOUD)
         return NoiseLevel::ELEVATED;
     return NoiseLevel::CRITICAL;
 }

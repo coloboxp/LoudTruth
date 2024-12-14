@@ -4,8 +4,8 @@
  * @brief Constructor for the LedIndicator class.
  */
 LedIndicator::LedIndicator()
-    : m_pixels(led_config::NUM_PIXELS,
-               pins::led::STRIP,
+    : m_pixels(config::led::NUM_PIXELS,
+               config::hardware::pins::led::STRIP,
                NEO_GRB + NEO_KHZ800)
 {
 }
@@ -38,20 +38,20 @@ void LedIndicator::update(const SignalProcessor &signal_processor)
 void LedIndicator::update_level_display(float noise_level)
 {
     // More sensitive thresholds for each LED
-    constexpr uint16_t thresholds[led_config::NUM_PIXELS] = {
-        signal_processing::ranges::QUIET,          // LED 0 (green) - 500
-        signal_processing::ranges::QUIET + 100,    // LED 1 - 600
-        signal_processing::ranges::MODERATE,       // LED 2 - 700
-        signal_processing::ranges::MODERATE + 100, // LED 3 - 800
-        signal_processing::ranges::MODERATE + 200, // LED 4 - 900
-        signal_processing::ranges::LOUD,           // LED 5 - 1000
-        signal_processing::ranges::LOUD + 150,     // LED 6 - 1150
-        signal_processing::ranges::MAX             // LED 7 - 1300
+    constexpr uint16_t thresholds[config::led::NUM_PIXELS] = {
+        config::signal_processing::ranges::QUIET,          // LED 0 (green) - 500
+        config::signal_processing::ranges::QUIET + 100,    // LED 1 - 600
+        config::signal_processing::ranges::MODERATE,       // LED 2 - 700
+        config::signal_processing::ranges::MODERATE + 100, // LED 3 - 800
+        config::signal_processing::ranges::MODERATE + 200, // LED 4 - 900
+        config::signal_processing::ranges::LOUD,           // LED 5 - 1000
+        config::signal_processing::ranges::LOUD + 150,     // LED 6 - 1150
+        config::signal_processing::ranges::MAX             // LED 7 - 1300
     };
 
     // Calculate how many LEDs should be on, starting from LED 0
     int active_leds = 1; // Always show at least the first (green) LED for normal levels
-    for (int i = 1; i < led_config::NUM_PIXELS; i++)
+    for (int i = 1; i < config::led::NUM_PIXELS; i++)
     {
         if (noise_level >= thresholds[i])
         {
@@ -60,11 +60,11 @@ void LedIndicator::update_level_display(float noise_level)
     }
 
     // Update LED colors - normal order, starting from 0
-    for (int i = 0; i < led_config::NUM_PIXELS; i++)
+    for (int i = 0; i < config::led::NUM_PIXELS; i++)
     {
         if (i < active_leds)
         {
-            m_pixels.setPixelColor(i, led_config::colors::INDICATOR_COLORS[i]);
+            m_pixels.setPixelColor(i, config::led::colors::INDICATOR_COLORS[i]);
         }
         else
         {

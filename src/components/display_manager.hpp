@@ -17,7 +17,7 @@ public:
 
 private:
     U8G2_ST7565_ERC12864_ALT_F_4W_HW_SPI m_u8g2;
-    int m_plot_buffer[display_config::plot::PLOT_POINTS];
+    int m_plot_buffer[config::display::plot::PLOT_POINTS];
     int m_plot_index{0};
 
     void draw_stats(const SignalProcessor &signal_processor);

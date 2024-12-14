@@ -18,7 +18,7 @@ private:
     unsigned long m_last_beep_time{0};
     unsigned long m_cooldown_start_time{0};
     unsigned long m_last_trigger_time{0};
-    uint32_t m_current_cooldown_ms{alert::BASE_COOLDOWN_MS};
+    uint32_t m_current_cooldown_ms{config::alert::BASE_COOLDOWN_MS};
 
     void handle_alert();
     void start_cooldown();

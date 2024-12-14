@@ -1,4 +1,5 @@
 #include "data_logger.hpp"
+#include <time.h>
 
 DataLogger::DataLogger() = default;
 
@@ -8,7 +9,7 @@ DataLogger::DataLogger() = default;
  */
 bool DataLogger::begin()
 {
-    if (!SD.begin(pins::sd::CS))
+    if (!SD.begin(config::hardware::pins::sd::CS))
     {
         Serial.println("SD card initialization failed!");
         return false;
@@ -16,27 +17,50 @@ bool DataLogger::begin()
 
     Serial.println("SD card initialized.");
     m_initialized = true;
+    return true;
+}
 
-    return create_headers();
+String DataLogger::get_current_filename()
+{
+    char filename[32];
+    time_t now;
+    time(&now);
+    struct tm timeinfo;
+
+    if (getLocalTime(&timeinfo))
+    {
+        // Format: YYMMDD.csv (e.g., 240315.csv for March 15, 2024)
+        strftime(filename, sizeof(filename), "%y%m%d.csv", &timeinfo);
+    }
+    else
+    {
+        // Fallback if time is not set: use counter
+        sprintf(filename, "LOG%03d.csv", m_file_counter++);
+        if (m_file_counter > 999)
+            m_file_counter = 0;
+    }
+
+    return String(filename);
 }
 
 /**
  * @brief Create the headers for the data file.
  * @return True if the headers are created successfully, false otherwise.
  */
-bool DataLogger::create_headers()
+bool DataLogger::create_headers(const String &filename)
 {
-    if (!m_initialized || SD.exists(FILENAME))
+    if (!m_initialized || SD.exists(filename))
     {
         return true;
     }
 
-    File dataFile = SD.open(FILENAME, FILE_WRITE);
+    File dataFile = SD.open(filename, FILE_WRITE);
     if (!dataFile)
     {
         return false;
     }
 
+    // Use Unix timestamp in headers
     dataFile.println("timestamp,noise,baseline,category,1min_avg,15min_avg");
     dataFile.close();
     return true;
@@ -54,14 +78,26 @@ bool DataLogger::log_data(const SignalProcessor &signal_processor)
         return false;
     }
 
-    File dataFile = SD.open(FILENAME, FILE_WRITE);
+    String current_filename = get_current_filename();
+
+    // Create headers if this is a new file
+    if (!create_headers(current_filename))
+    {
+        return false;
+    }
+
+    File dataFile = SD.open(current_filename, FILE_WRITE);
     if (!dataFile)
     {
         return false;
     }
 
-    // Format: timestamp,current_noise,baseline,category,1min_avg,15min_avg
-    dataFile.print(millis());
+    // Get current timestamp
+    time_t now;
+    time(&now); // Get current time as Unix timestamp
+
+    // Format: unix_timestamp,current_noise,baseline,category,1min_avg,15min_avg
+    dataFile.print(now);
     dataFile.print(",");
     dataFile.print(signal_processor.get_current_value());
     dataFile.print(",");
