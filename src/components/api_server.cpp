@@ -4,13 +4,14 @@
 #include <esp_system.h>
 #include <esp_timer.h>
 #include <driver/adc.h>
+#include <esp_chip_info.h>
 
 #ifndef APP_VERSION
 #define APP_VERSION "1.0.0"
 #endif
 
 #ifndef ARDUINO_VERSION
-#define ARDUINO_VERSION ARDUINO_ESP32_VERSION
+#define ARDUINO_VERSION ESP.getSdkVersion()
 #endif
 
 #ifndef configMAX_TASKS
@@ -412,6 +413,28 @@ void ApiServer::handle_get_system_info()
     {
         doc["app_stats"]["display_backlight"] = m_display_manager_ptr->get_backlight_active();
     }
+
+    // Task Statistics
+    doc["tasks"]["count"] = uxTaskGetNumberOfTasks();
+    doc["tasks"]["min_free_stack"] = uxTaskGetStackHighWaterMark(nullptr);
+
+    // Network Information
+    doc["network"]["wifi_rssi"] = WiFi.RSSI();
+    doc["network"]["wifi_ssid"] = WiFi.SSID();
+    doc["network"]["ip"] = WiFi.localIP().toString();
+    doc["network"]["mac"] = WiFi.macAddress();
+    doc["network"]["hostname"] = WiFi.getHostname();
+
+    // Runtime Statistics
+    doc["runtime"]["uptime_ms"] = millis();
+    doc["runtime"]["cpu_freq_mhz"] = getCpuFrequencyMhz();
+    doc["runtime"]["temp_f"] = temperatureRead();
+
+    // Build Information
+    doc["build"]["version"] = APP_VERSION;
+    doc["build"]["date"] = __DATE__;
+    doc["build"]["time"] = __TIME__;
+    doc["build"]["sdk_version"] = ESP.getSdkVersion();
 
     // Send response
     String output;

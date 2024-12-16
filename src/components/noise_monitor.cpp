@@ -2,7 +2,7 @@
 #include <time.h>
 
 NoiseMonitor::NoiseMonitor()
-    : m_display(m_alert_manager)
+    : m_display_manager(m_alert_manager)
 {
     // Empty constructor - initialization moved to begin()
 }
@@ -17,7 +17,7 @@ bool NoiseMonitor::begin()
     m_sound_sensor.begin();
     delay(100); // Give ADC time to stabilize
 
-    m_display.begin();
+    m_display_manager.begin();
     delay(100); // Give display time to initialize
 
     m_led_indicator.begin();
@@ -28,6 +28,11 @@ bool NoiseMonitor::begin()
 
     bool logger_ok = m_logger.begin();
     delay(50); // Give SD card time to initialize
+
+    // Initialize API server with required components
+    m_api_server.set_signal_processor(&m_signal_processor);
+    m_api_server.set_display_manager(&m_display_manager);
+    m_api_server.begin();
 
     return logger_ok; // Return logger status
 }
@@ -47,6 +52,12 @@ void NoiseMonitor::update()
 
     // Update alert manager
     m_alert_manager.update(m_signal_processor);
+
+    // Handle API requests if WiFi is available
+    if (m_api_server.is_available())
+    {
+        m_api_server.handle();
+    }
 }
 
 /**
@@ -62,7 +73,7 @@ void NoiseMonitor::handle_sampling()
         m_signal_processor.process_sample(raw_value);
 
         // Update plot buffer
-        m_display.add_plot_point(m_signal_processor.get_current_value());
+        m_display_manager.add_plot_point(m_signal_processor.get_current_value());
 
         m_last_sample_time = current_time;
     }
@@ -78,7 +89,7 @@ void NoiseMonitor::handle_display()
     // Update display at slower rate
     if (current_time - m_last_display_time >= config::timing::DISPLAY_INTERVAL)
     {
-        m_display.update(m_signal_processor);
+        m_display_manager.update(m_signal_processor);
         m_last_display_time = current_time;
     }
 

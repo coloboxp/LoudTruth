@@ -7,6 +7,7 @@
 #include "alert_manager.hpp"
 #include "data_logger.hpp"
 #include "api_handler.hpp"
+#include "api_server.hpp"
 
 /**
  * @brief Class representing the noise monitor.
@@ -21,10 +22,11 @@ public:
 private:
     SoundSensor m_sound_sensor;
     SignalProcessor m_signal_processor;
-    DisplayManager m_display;
+    DisplayManager m_display_manager;
     LedIndicator m_led_indicator;
     AlertManager m_alert_manager;
     DataLogger m_logger;
+    ApiServer &m_api_server{ApiServer::instance()};
 
     unsigned long m_last_sample_time{0};
     unsigned long m_last_display_time{0};
