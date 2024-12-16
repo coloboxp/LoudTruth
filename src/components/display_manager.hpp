@@ -27,4 +27,9 @@ private:
     void draw_stats(const SignalProcessor &signal_processor);
     void draw_plot();
     const char *noise_level_to_string(SignalProcessor::NoiseLevel level) const;
+    unsigned long m_last_backlight_on{0};
+    bool m_backlight_active{false};
+
+    void control_backlight(SignalProcessor::NoiseLevel level);
+    void set_backlight(bool state);
 };

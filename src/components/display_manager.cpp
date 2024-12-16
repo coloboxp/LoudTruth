@@ -39,9 +39,9 @@ void DisplayManager::begin()
     // Display setup
     m_u8g2.setContrast(0x3A); // Using contrast from the GitHub issue
 
-    // Backlight control
+    // Initialize backlight pin and ensure it starts OFF
     pinMode(config::hardware::pins::display::BACKLIGHT, OUTPUT);
-    digitalWrite(config::hardware::pins::display::BACKLIGHT, LOW); // LOW = ON
+    set_backlight(false);
 
     // Test pattern
     m_u8g2.clearBuffer();
@@ -59,6 +59,12 @@ void DisplayManager::begin()
  */
 void DisplayManager::update(const SignalProcessor &signal_processor)
 {
+    SignalProcessor::NoiseLevel current_level = signal_processor.get_noise_category();
+
+    // Control backlight based on noise level
+    control_backlight(current_level);
+
+    // Always update display regardless of backlight state
     m_u8g2.clearBuffer();
     draw_stats(signal_processor);
     draw_plot();
@@ -185,4 +191,29 @@ const char *DisplayManager::noise_level_to_string(SignalProcessor::NoiseLevel le
     default:
         return "???";
     }
+}
+
+void DisplayManager::control_backlight(SignalProcessor::NoiseLevel level)
+{
+    const unsigned long BACKLIGHT_TIMEOUT_MS = 30000; // 30 seconds timeout
+    unsigned long current_time = millis();
+
+    // Turn on backlight if noise level is above OK
+    if (level > SignalProcessor::NoiseLevel::OK)
+    {
+        set_backlight(true);
+        m_last_backlight_on = current_time;
+    }
+    // Turn off backlight if timeout has elapsed
+    else if (m_backlight_active &&
+             (current_time - m_last_backlight_on >= BACKLIGHT_TIMEOUT_MS))
+    {
+        set_backlight(false);
+    }
+}
+
+void DisplayManager::set_backlight(bool state)
+{
+    m_backlight_active = state;
+    digitalWrite(config::hardware::pins::display::BACKLIGHT, state ? LOW : HIGH); // LOW = ON
 }
