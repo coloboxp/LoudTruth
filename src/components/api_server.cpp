@@ -277,59 +277,22 @@ void ApiServer::handle_get_config()
 {
     JsonDocument doc;
 
-    // System configuration
-    doc["version"] = APP_VERSION;
-    doc["device_name"] = config::device::NAME;
-
-    // Signal processing config
+    // Signal processing configuration
     JsonObject signal_config = doc["signal_processing"].to<JsonObject>();
-    signal_config["ema_alpha"] = config::signal_processing::EMA_ALPHA;
-    signal_config["baseline_alpha"] = config::signal_processing::BASELINE_ALPHA;
+    signal_config["ema_alpha"] = m_signal_processor_ptr ? m_signal_processor_ptr->get_ema_alpha() : config::signal_processing::EMA_ALPHA;
 
-    auto ranges = signal_config["ranges"].to<JsonObject>();
-    ranges["quiet"] = config::signal_processing::ranges::QUIET;
-    ranges["moderate"] = config::signal_processing::ranges::MODERATE;
-    ranges["loud"] = config::signal_processing::ranges::LOUD;
-    ranges["max"] = config::signal_processing::ranges::MAX;
+    JsonObject ranges = signal_config["ranges"].to<JsonObject>();
+    ranges["quiet"] = config::signal_processing::ranges::quiet;
+    ranges["moderate"] = config::signal_processing::ranges::moderate;
+    ranges["loud"] = config::signal_processing::ranges::loud;
+    ranges["max"] = config::signal_processing::ranges::max;
 
     // Timing configuration
     JsonObject timing_config = doc["timing"].to<JsonObject>();
-    timing_config["sample_interval"] = config::timing::SAMPLE_INTERVAL;
-    timing_config["display_interval"] = config::timing::DISPLAY_INTERVAL;
-    timing_config["logging_interval"] = config::timing::LOGGING_INTERVAL;
-    timing_config["led_update_interval"] = config::timing::LED_UPDATE_INTERVAL;
-
-    // Hardware pins configuration
-    JsonObject hw_pins = doc["hardware"]["pins"].to<JsonObject>();
-
-    // SPI pins
-    hw_pins["spi"]["mosi"] = config::hardware::pins::MOSI;
-    hw_pins["spi"]["miso"] = config::hardware::pins::MISO;
-    hw_pins["spi"]["sck"] = config::hardware::pins::SCK;
-
-    // Display pins
-    JsonObject display_pins = hw_pins["display"].to<JsonObject>();
-    display_pins["cs"] = config::hardware::pins::display::CS;
-    display_pins["dc"] = config::hardware::pins::display::DC;
-    display_pins["reset"] = config::hardware::pins::display::RESET;
-    display_pins["backlight"] = config::hardware::pins::display::BACKLIGHT;
-
-    // LED and sensor pins
-    hw_pins["led_strip"] = config::hardware::pins::led::STRIP;
-    hw_pins["led_indicator"] = config::hardware::pins::LED_INDICATOR;
-    hw_pins["sound_sensor"] = config::hardware::pins::analog::SOUND_SENSOR;
-
-    // ADC configuration
-    JsonObject adc_config = doc["adc"].to<JsonObject>();
-    adc_config["resolution_bits"] = config::adc::RESOLUTION_BITS;
-    adc_config["max_value"] = config::adc::MAX_VALUE;
-    adc_config["averaging_samples"] = config::adc::AVERAGING_SAMPLES;
-
-    auto sound_sensor = adc_config["sound_sensor"].to<JsonObject>();
-    sound_sensor["voltage_reference"] = config::adc::sound_sensor::VOLTAGE_REFERENCE;
-    sound_sensor["voltage_gain"] = config::adc::sound_sensor::VOLTAGE_GAIN;
-    sound_sensor["min_db"] = config::adc::sound_sensor::MIN_DB;
-    sound_sensor["max_db"] = config::adc::sound_sensor::MAX_DB;
+    timing_config["sample_interval"] = config::timing::TimingConfig::sample_interval;
+    timing_config["display_interval"] = config::timing::TimingConfig::display_interval;
+    timing_config["logging_interval"] = config::timing::TimingConfig::logging_interval;
+    timing_config["led_update_interval"] = config::timing::TimingConfig::led_update_interval;
 
     send_json_response(doc);
 }
@@ -363,19 +326,7 @@ void ApiServer::handle_put_config()
     if (doc["signal_processing"].is<JsonObject>())
     {
         JsonObject signal_config = doc["signal_processing"];
-        JsonDocument config_doc;
         bool config_updated = false;
-
-        if (signal_config["ema_alpha"].is<float>())
-        {
-            float value = signal_config["ema_alpha"].as<float>();
-            if (value > 0.0f && value < 1.0f)
-            {
-                config_doc["ema_alpha"] = value;
-                config_updated = true;
-                updates.add("ema_alpha");
-            }
-        }
 
         if (signal_config["ranges"].is<JsonObject>())
         {
@@ -383,7 +334,6 @@ void ApiServer::handle_put_config()
             if (ranges["quiet"].is<int>() && ranges["moderate"].is<int>() &&
                 ranges["loud"].is<int>() && ranges["max"].is<int>())
             {
-
                 int quiet = ranges["quiet"];
                 int moderate = ranges["moderate"];
                 int loud = ranges["loud"];
@@ -391,26 +341,19 @@ void ApiServer::handle_put_config()
 
                 if (quiet < moderate && moderate < loud && loud < max)
                 {
-                    auto config_ranges = config_doc["ranges"].to<JsonObject>();
-                    config_ranges["quiet"] = quiet;
-                    config_ranges["moderate"] = moderate;
-                    config_ranges["loud"] = loud;
-                    config_ranges["max"] = max;
+                    config::signal_processing::ranges::quiet = quiet;
+                    config::signal_processing::ranges::moderate = moderate;
+                    config::signal_processing::ranges::loud = loud;
+                    config::signal_processing::ranges::max = max;
                     config_updated = true;
-                    updates.add("ranges");
+                    updates.add("signal_processing.ranges");
                 }
             }
         }
 
-        // Save signal processing configuration if updated
         if (config_updated)
         {
-            File config_file = SD.open("/config/signal.json", FILE_WRITE);
-            if (config_file)
-            {
-                serializeJson(config_doc, config_file);
-                config_file.close();
-            }
+            save_current_config();
         }
     }
 
@@ -418,35 +361,50 @@ void ApiServer::handle_put_config()
     if (doc["timing"].is<JsonObject>())
     {
         JsonObject timing = doc["timing"];
-        JsonDocument config_doc;
-        bool config_updated = false;
+        bool timing_updated = false;
 
         if (timing["sample_interval"].is<uint32_t>())
         {
             uint32_t interval = timing["sample_interval"].as<uint32_t>();
             if (interval >= 1 && interval <= 1000)
             {
-                config_doc["sample_interval"] = interval;
-                config_updated = true;
-                updates.add("sample_interval");
+                config::timing::TimingConfig::sample_interval = interval;
+                timing_updated = true;
+                updates.add("timing.sample_interval");
             }
         }
 
-        // Save timing configuration if updated
-        if (config_updated)
+        if (timing["display_interval"].is<uint32_t>())
         {
-            File config_file = SD.open("/config/timing.json", FILE_WRITE);
-            if (config_file)
-            {
-                serializeJson(config_doc, config_file);
-                config_file.close();
-            }
+            config::timing::TimingConfig::display_interval =
+                timing["display_interval"].as<uint32_t>();
+            timing_updated = true;
+            updates.add("timing.display_interval");
+        }
+
+        if (timing["logging_interval"].is<uint32_t>())
+        {
+            config::timing::TimingConfig::logging_interval =
+                timing["logging_interval"].as<uint32_t>();
+            timing_updated = true;
+            updates.add("timing.logging_interval");
+        }
+
+        if (timing["led_update_interval"].is<uint32_t>())
+        {
+            config::timing::TimingConfig::led_update_interval =
+                timing["led_update_interval"].as<uint32_t>();
+            timing_updated = true;
+            updates.add("timing.led_update_interval");
+        }
+
+        if (timing_updated)
+        {
+            save_current_config();
         }
     }
 
-    response["status"] = updates.size() > 0 ? "Configuration updated" : "No valid updates";
     response["needs_restart"] = needs_restart;
-
     send_json_response(response);
 }
 

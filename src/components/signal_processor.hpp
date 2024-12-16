@@ -35,6 +35,8 @@ public:
 
     void begin();
 
+    float get_ema_alpha() const { return m_ema_alpha; }
+
 private:
     static constexpr const char *CONFIG_FILE = "/monitors.json";
     void load_monitor_configs();
@@ -44,6 +46,7 @@ private:
     std::vector<std::unique_ptr<StatisticsMonitor>> m_monitors;
     float m_ema_value{0.0f};
     float m_baseline_ema{0.0f};
+    float m_ema_alpha{config::signal_processing::EMA_ALPHA};
 
     void update_ema(uint16_t raw_value);
     void update_monitors(float value);
