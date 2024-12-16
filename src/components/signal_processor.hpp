@@ -33,11 +33,17 @@ public:
     StatisticsMonitor *get_monitor(const std::string &id) const;
     std::vector<StatisticsMonitor *> get_priority_monitors(size_t count = 2) const;
 
+    void begin();
+
 private:
-    float m_ema_value{0.0f};
-    float m_baseline_ema{0.0f};
+    static constexpr const char *CONFIG_FILE = "/monitors.json";
+    void load_monitor_configs();
+    void save_monitor_configs() const;
+    void create_default_monitors();
 
     std::vector<std::unique_ptr<StatisticsMonitor>> m_monitors;
+    float m_ema_value{0.0f};
+    float m_baseline_ema{0.0f};
 
     void update_ema(uint16_t raw_value);
     void update_monitors(float value);
