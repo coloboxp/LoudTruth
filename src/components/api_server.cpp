@@ -20,6 +20,9 @@
 
 void ApiServer::begin()
 {
+    // Load saved configuration
+    load_saved_config();
+
     // Define API routes
     m_server.on("/", HTTP_GET, [this]()
                 { handle_root(); });
@@ -333,6 +336,11 @@ void ApiServer::handle_get_config()
 
 void ApiServer::handle_put_config()
 {
+    if (!SD.begin())
+    {
+        return send_error("SD card initialization failed");
+    }
+
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, m_server.arg("plain"));
 
@@ -345,16 +353,26 @@ void ApiServer::handle_put_config()
     JsonDocument response;
     JsonArray updates = response["updated"].to<JsonArray>();
 
-    // Validate and apply configuration updates
+    // Create config directory if it doesn't exist
+    if (!SD.exists("/config"))
+    {
+        SD.mkdir("/config");
+    }
+
+    // Handle signal processing configuration
     if (doc["signal_processing"].is<JsonObject>())
     {
         JsonObject signal_config = doc["signal_processing"];
+        JsonDocument config_doc;
+        bool config_updated = false;
 
         if (signal_config["ema_alpha"].is<float>())
         {
             float value = signal_config["ema_alpha"].as<float>();
             if (value > 0.0f && value < 1.0f)
             {
+                config_doc["ema_alpha"] = value;
+                config_updated = true;
                 updates.add("ema_alpha");
             }
         }
@@ -362,10 +380,10 @@ void ApiServer::handle_put_config()
         if (signal_config["ranges"].is<JsonObject>())
         {
             JsonObject ranges = signal_config["ranges"];
-
             if (ranges["quiet"].is<int>() && ranges["moderate"].is<int>() &&
                 ranges["loud"].is<int>() && ranges["max"].is<int>())
             {
+
                 int quiet = ranges["quiet"];
                 int moderate = ranges["moderate"];
                 int loud = ranges["loud"];
@@ -373,23 +391,55 @@ void ApiServer::handle_put_config()
 
                 if (quiet < moderate && moderate < loud && loud < max)
                 {
+                    auto config_ranges = config_doc["ranges"].to<JsonObject>();
+                    config_ranges["quiet"] = quiet;
+                    config_ranges["moderate"] = moderate;
+                    config_ranges["loud"] = loud;
+                    config_ranges["max"] = max;
+                    config_updated = true;
                     updates.add("ranges");
                 }
             }
         }
+
+        // Save signal processing configuration if updated
+        if (config_updated)
+        {
+            File config_file = SD.open("/config/signal.json", FILE_WRITE);
+            if (config_file)
+            {
+                serializeJson(config_doc, config_file);
+                config_file.close();
+            }
+        }
     }
 
-    // Timing configuration
+    // Handle timing configuration
     if (doc["timing"].is<JsonObject>())
     {
         JsonObject timing = doc["timing"];
+        JsonDocument config_doc;
+        bool config_updated = false;
 
         if (timing["sample_interval"].is<uint32_t>())
         {
             uint32_t interval = timing["sample_interval"].as<uint32_t>();
             if (interval >= 1 && interval <= 1000)
             {
+                config_doc["sample_interval"] = interval;
+                config_updated = true;
                 updates.add("sample_interval");
+            }
+        }
+
+        // Save timing configuration if updated
+        if (config_updated)
+        {
+            File config_file = SD.open("/config/timing.json", FILE_WRITE);
+            if (config_file)
+            {
+                serializeJson(config_doc, config_file);
+                config_file.close();
             }
         }
     }
@@ -543,4 +593,82 @@ void ApiServer::handle_get_system_info()
     serializeJson(doc, output);
     cors_headers();
     m_server.send(200, "application/json", output);
+}
+
+bool ApiServer::load_saved_config()
+{
+    if (!SD.begin())
+    {
+        return false;
+    }
+
+    // Load signal processing config
+    if (SD.exists("/config/signal.json"))
+    {
+        File config_file = SD.open("/config/signal.json", FILE_READ);
+        if (config_file)
+        {
+            JsonDocument doc;
+            DeserializationError error = deserializeJson(doc, config_file);
+            if (!error && m_signal_processor_ptr)
+            {
+                // Apply signal processing configuration
+                if (doc["ema_alpha"].is<float>())
+                {
+                    float value = doc["ema_alpha"].as<float>();
+                    if (value > 0.0f && value < 1.0f)
+                    {
+                        m_signal_processor_ptr->process_sample(value);
+                    }
+                }
+
+                if (doc["ranges"].is<JsonObject>())
+                {
+                    JsonObject ranges = doc["ranges"];
+                    if (ranges["quiet"].is<int>() && ranges["moderate"].is<int>() &&
+                        ranges["loud"].is<int>() && ranges["max"].is<int>())
+                    {
+                        // Load ranges but don't apply - they are constants
+                        // This is just for validation
+                        int quiet = ranges["quiet"];
+                        int moderate = ranges["moderate"];
+                        int loud = ranges["loud"];
+                        int max = ranges["max"];
+
+                        if (!(quiet < moderate && moderate < loud && loud < max))
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+            config_file.close();
+        }
+    }
+
+    // Load timing config
+    if (SD.exists("/config/timing.json"))
+    {
+        File config_file = SD.open("/config/timing.json", FILE_READ);
+        if (config_file)
+        {
+            JsonDocument doc;
+            DeserializationError error = deserializeJson(doc, config_file);
+            if (!error)
+            {
+                // Validate timing configuration
+                if (doc["sample_interval"].is<uint32_t>())
+                {
+                    uint32_t interval = doc["sample_interval"].as<uint32_t>();
+                    if (!(interval >= 1 && interval <= 1000))
+                    {
+                        return false;
+                    }
+                }
+            }
+            config_file.close();
+        }
+    }
+
+    return true;
 }

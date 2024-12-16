@@ -58,4 +58,5 @@ private:
     bool validate_monitor_config(const JsonObject &config);
     void handle_not_found();
     void cors_headers();
+    bool load_saved_config();
 };
