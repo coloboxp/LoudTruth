@@ -4,12 +4,8 @@
  * @brief Constructor for the DisplayManager class.
  */
 DisplayManager::DisplayManager(const AlertManager &alert_manager)
-    : m_u8g2(U8G2_ST7565_ERC12864_ALT_F_4W_HW_SPI(
-          U8G2_R0,
-          config::hardware::pins::display::CS,
-          config::hardware::pins::display::DC,
-          config::hardware::pins::display::RESET)),
-      m_alert_manager(alert_manager)
+    : m_alert_manager(alert_manager),
+      m_u8g2(U8G2_R0, /* cs=*/5, /* dc=*/17, /* reset=*/16)
 {
     memset(m_plot_buffer, 0, sizeof(m_plot_buffer));
 }
@@ -87,62 +83,238 @@ void DisplayManager::add_plot_point(int value)
  */
 void DisplayManager::draw_stats(const SignalProcessor &signal_processor)
 {
-    m_u8g2.setFont(u8g2_font_6x10_tf);
+    m_u8g2.setFont(u8g2_font_4x6_tr); // Smallest font for maximum data
 
-    // Draw current noise level and category
-    char noise_str[32];
-    snprintf(noise_str, sizeof(noise_str), "ADC: %d",
-             static_cast<int>(signal_processor.get_current_value()));
-    m_u8g2.drawStr(0, 10, noise_str);
+    draw_status_bar(signal_processor);
+    draw_monitor_stats(signal_processor);
+    draw_detailed_trends(signal_processor);
+}
 
-    // Draw WiFi and ThingSpeak status in top right
-    char status[5] = "    "; // 4 spaces + null terminator
-    if (wifi::WiFiManager::instance().is_connected())
+void DisplayManager::draw_status_bar(const SignalProcessor &signal_processor)
+{
+    char buffer[32];
+    const char *level_str = noise_level_to_string(signal_processor.get_noise_category());
+
+    float current = signal_processor.get_current_value();
+    float baseline = signal_processor.get_baseline();
+    char trend_arrow = (current > baseline * 1.1f) ? '^' : (current < baseline * 0.9f) ? 'v'
+                                                                                       : '-';
+
+    snprintf(buffer, sizeof(buffer), "%s %c %.0f/%.0f",
+             level_str, trend_arrow, current, baseline);
+
+    // Inverse video for status bar
+    uint8_t width = m_u8g2.getStrWidth(buffer);
+    m_u8g2.setDrawColor(1);
+    m_u8g2.drawBox(0, 0, m_u8g2.getWidth(), 6);
+    m_u8g2.setDrawColor(0);
+    m_u8g2.drawStr(1, 5, buffer);
+    m_u8g2.setDrawColor(1);
+}
+
+void DisplayManager::draw_monitor_stats(const SignalProcessor &signal_processor)
+{
+    std::vector<StatisticsMonitor *> priority_monitors = signal_processor.get_priority_monitors(2);
+    char buffer[32];
+    int y_pos = 8; // Start after status bar
+
+    for (const auto *monitor : priority_monitors)
     {
-        status[0] = 'W';
+        if (!monitor)
+            continue;
+
+        const auto &stats = monitor->get_stats();
+        const auto &config = monitor->get_config();
+
+        // Draw mini sparkline (24px wide, 8px high)
+        draw_mini_sparkline(monitor, 0, y_pos, 24, 8);
+
+        // Draw label and stats
+        snprintf(buffer, sizeof(buffer), "%s L%.0f A%.0f H%.0f",
+                 config.label.c_str(), stats.min, stats.avg, stats.max);
+        m_u8g2.drawStr(26, y_pos + 6, buffer);
+
+        // Draw trend indicator
+        float trend = calculate_trend(monitor);
+        const char *trend_char = trend > 0.05f ? "^" : trend < -0.05f ? "v"
+                                                                      : "-";
+        m_u8g2.drawStr(m_u8g2.getWidth() - 6, y_pos + 6, trend_char);
+
+        y_pos += 12;
     }
-    if (ApiHandler::instance().is_available())
-    {
-        status[2] = 'T';
-    }
-    m_u8g2.drawStr(110, 10, status);
+}
 
-    // Draw noise category
-    const char *category = noise_level_to_string(signal_processor.get_noise_category());
-    if (signal_processor.get_noise_category() >= SignalProcessor::NoiseLevel::ELEVATED)
+void DisplayManager::draw_mini_sparkline(const StatisticsMonitor *monitor,
+                                         int x, int y, int w, int h)
+{
+    if (!monitor)
+        return;
+
+    const auto &history = monitor->get_stats().history;
+    if (history.empty())
+        return;
+
+    float min_val = history[0];
+    float max_val = history[0];
+
+    for (float val : history)
     {
-        uint8_t category_width = m_u8g2.getStrWidth(category);
-        m_u8g2.setDrawColor(1);
-        m_u8g2.drawBox(64, 2, category_width, 10);
-        m_u8g2.setDrawColor(0);
-        m_u8g2.drawStr(64, 10, category);
-        m_u8g2.setDrawColor(1);
+        min_val = std::min(min_val, val);
+        max_val = std::max(max_val, val);
+    }
+
+    float range = std::max(max_val - min_val, 1.0f);
+
+    // Draw frame
+    m_u8g2.drawFrame(x, y, w, h);
+
+    // Draw sparkline
+    int last_x = x;
+    int last_y = y + h - 1;
+    bool first = true;
+
+    for (size_t i = 0; i < history.size(); ++i)
+    {
+        int plot_x = x + (i * (w - 2)) / history.size() + 1;
+        int plot_y = y + h - 1 - ((history[i] - min_val) * (h - 2)) / range;
+
+        if (!first)
+        {
+            m_u8g2.drawLine(last_x, last_y, plot_x, plot_y);
+        }
+
+        last_x = plot_x;
+        last_y = plot_y;
+        first = false;
+    }
+}
+
+void DisplayManager::draw_detailed_trends(const SignalProcessor &signal_processor)
+{
+    std::vector<StatisticsMonitor *> priority_monitors = signal_processor.get_priority_monitors(2);
+    if (priority_monitors.empty())
+        return;
+
+    // Draw trend area frame
+    m_u8g2.drawFrame(0, 32, m_u8g2.getWidth(), 32);
+
+    // Draw grid lines
+    for (int i = 1; i < 3; i++)
+    {
+        m_u8g2.drawHLine(1, 32 + (i * 10), m_u8g2.getWidth() - 2);
+        m_u8g2.drawVLine(i * (m_u8g2.getWidth() / 3), 33, 30);
+    }
+
+    // Draw trends
+    if (priority_monitors.size() > 1)
+    {
+        draw_trend_line(priority_monitors[0], 33, 62, true);  // Primary trend
+        draw_trend_line(priority_monitors[1], 33, 62, false); // Secondary trend
     }
     else
     {
-        m_u8g2.drawStr(64, 10, category);
+        draw_trend_line(priority_monitors[0], 33, 62, true); // Single trend
+    }
+}
+
+float DisplayManager::calculate_trend(const StatisticsMonitor *monitor)
+{
+    if (!monitor)
+        return 0.0f;
+
+    const auto &history = monitor->get_stats().history;
+    if (history.size() < 2)
+        return 0.0f;
+
+    size_t count = std::min(size_t(5), history.size());
+    float sum_start = 0, sum_end = 0;
+
+    for (size_t i = 0; i < count; i++)
+    {
+        sum_start += history[i];
+        sum_end += history[history.size() - 1 - i];
     }
 
-    // Draw statistics with proper alignment
-    const auto &one_min = signal_processor.get_one_min_stats();
-    const auto &fifteen_min = signal_processor.get_fifteen_min_stats();
+    return (sum_end - sum_start) / (count * count);
+}
 
-    char stats_str[32];
-    snprintf(stats_str, sizeof(stats_str), "1m:  %4d [%4d-%4d]",
-             static_cast<int>(one_min.avg),
-             one_min.min,
-             one_min.max);
-    m_u8g2.drawStr(0, 20, stats_str);
+void DisplayManager::draw_trend_line(const StatisticsMonitor *monitor,
+                                     int y_start, int y_end, bool primary)
+{
+    if (!monitor)
+        return;
 
-    snprintf(stats_str, sizeof(stats_str), "15m: %4d [%4d-%4d]",
-             static_cast<int>(fifteen_min.avg),
-             fifteen_min.min,
-             fifteen_min.max);
-    m_u8g2.drawStr(0, 30, stats_str);
+    const auto &history = monitor->get_stats().history;
+    if (history.empty())
+        return;
 
-    // // Draw chart grid and labels
-    // m_u8g2.drawHLine(0, 40, 128); // Baseline
-    // m_u8g2.drawVLine(0, 40, -30); // Y-axis
+    float min_val = history[0];
+    float max_val = history[0];
+
+    for (float val : history)
+    {
+        min_val = std::min(min_val, val);
+        max_val = std::max(max_val, val);
+    }
+
+    float range = std::max(max_val - min_val, 1.0f);
+    int height = y_end - y_start;
+
+    // Draw points
+    int last_x = 0;
+    int last_y = 0;
+    bool first = true;
+
+    for (size_t i = 0; i < history.size(); ++i)
+    {
+        int x = (i * (m_u8g2.getWidth() - 4)) / history.size() + 2;
+        int y = y_end - ((history[i] - min_val) * height) / range;
+
+        if (!first)
+        {
+            if (primary)
+            {
+                m_u8g2.drawLine(last_x, last_y, x, y);
+            }
+            else
+            {
+                draw_dotted_line(last_x, last_y, x, y);
+            }
+        }
+
+        last_x = x;
+        last_y = y;
+        first = false;
+    }
+}
+
+void DisplayManager::draw_dotted_line(int x1, int y1, int x2, int y2)
+{
+    int dx = abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
+    int dy = abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
+    int err = (dx > dy ? dx : -dy) / 2;
+    int dot_counter = 0;
+
+    while (true)
+    {
+        if (dot_counter++ % 2 == 0)
+        {
+            m_u8g2.drawPixel(x1, y1);
+        }
+        if (x1 == x2 && y1 == y2)
+            break;
+        int e2 = err;
+        if (e2 > -dx)
+        {
+            err -= dy;
+            x1 += sx;
+        }
+        if (e2 < dy)
+        {
+            err += dx;
+            y1 += sy;
+        }
+    }
 }
 
 /**
@@ -150,25 +322,8 @@ void DisplayManager::draw_stats(const SignalProcessor &signal_processor)
  */
 void DisplayManager::draw_plot()
 {
-    // Draw the actual plot points with increased sensitivity
-    for (int i = 0; i < config::display::plot::PLOT_POINTS - 1; i++)
-    {
-        int x1 = i * 2;
-        int x2 = (i + 1) * 2;
-
-        // Shows the value of the plot buffer as a line on the display
-        int y1 = map(m_plot_buffer[i], 0, config::signal_processing::ranges::MAX,
-                     config::display::plot::PLOT_BASELINE_Y_POSITION,
-                     config::display::plot::PLOT_BASELINE_Y_POSITION - config::display::plot::PLOT_HEIGHT);
-
-        // Draws a line between the current and next point
-        int y2 = map(m_plot_buffer[(i + 1)], 0, config::signal_processing::ranges::MAX,
-                     config::display::plot::PLOT_BASELINE_Y_POSITION,
-                     config::display::plot::PLOT_BASELINE_Y_POSITION - config::display::plot::PLOT_HEIGHT);
-
-        // Draws the line between the current and next point
-        m_u8g2.drawLine(x1, y1, x2, y2);
-    }
+    // This can remain as is or be modified to show longer-term trends
+    // depending on your preference
 }
 
 /**

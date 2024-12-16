@@ -73,41 +73,22 @@ bool DataLogger::create_headers(const String &filename)
  */
 bool DataLogger::log_data(const SignalProcessor &signal_processor)
 {
-    if (!m_initialized)
-    {
-        return false;
-    }
-
-    String current_filename = get_current_filename();
-
-    // Create headers if this is a new file
-    if (!create_headers(current_filename))
-    {
-        return false;
-    }
-
-    File dataFile = SD.open(current_filename, FILE_WRITE);
+    File dataFile = SD.open("/data.csv", FILE_APPEND);
     if (!dataFile)
     {
         return false;
     }
 
-    // Get current timestamp
-    time_t now;
-    time(&now); // Get current time as Unix timestamp
+    // Get monitors by ID
+    auto *one_min = signal_processor.get_monitor("1min");
+    auto *fifteen_min = signal_processor.get_monitor("15min");
 
-    // Format: unix_timestamp,current_noise,baseline,category,1min_avg,15min_avg
-    dataFile.print(now);
-    dataFile.print(",");
+    // Write current values and averages
     dataFile.print(signal_processor.get_current_value());
     dataFile.print(",");
-    dataFile.print(signal_processor.get_baseline());
+    dataFile.print(one_min ? one_min->get_stats().avg : 0.0f);
     dataFile.print(",");
-    dataFile.print(static_cast<int>(signal_processor.get_noise_category()));
-    dataFile.print(",");
-    dataFile.print(signal_processor.get_one_min_stats().avg);
-    dataFile.print(",");
-    dataFile.println(signal_processor.get_fifteen_min_stats().avg);
+    dataFile.println(fifteen_min ? fifteen_min->get_stats().avg : 0.0f);
 
     dataFile.close();
     return true;

@@ -1,94 +1,125 @@
 #include "signal_processor.hpp"
 
-SignalProcessor::SignalProcessor() = default;
+SignalProcessor::SignalProcessor()
+{
+    // Add default monitors with explicit Config objects
+    StatisticsMonitor::Config one_min_config;
+    one_min_config.id = "1min";
+    one_min_config.label = "1 Minute";
+    one_min_config.period_ms = 60000;
+    one_min_config.priority = 1;
+    add_monitor(one_min_config);
 
-/*  *
- * @brief Process a single sample from the ADC.
- * @param raw_value The raw ADC value to process.
- */
+    StatisticsMonitor::Config fifteen_min_config;
+    fifteen_min_config.id = "15min";
+    fifteen_min_config.label = "15 Minutes";
+    fifteen_min_config.period_ms = 900000;
+    fifteen_min_config.priority = 2;
+    add_monitor(fifteen_min_config);
+}
+
 void SignalProcessor::process_sample(uint16_t raw_value)
 {
-    // Update current value immediately
-    m_ema_value = (config::signal_processing::EMA_ALPHA * raw_value) +
-                  ((1.0f - config::signal_processing::EMA_ALPHA) * m_ema_value);
-
-    // Update baseline more slowly
-    if (m_baseline_ema == 0)
-    {
-        m_baseline_ema = m_ema_value;
-    }
-    m_baseline_ema = (config::signal_processing::BASELINE_ALPHA * m_ema_value) +
-                     ((1.0f - config::signal_processing::BASELINE_ALPHA) * m_baseline_ema);
-
-    // Update each statistic window independently
-    unsigned long current_time = millis();
-
-    // Update statistics for each time window
-    update_statistics(m_one_min_stats, m_ema_value);
-    update_statistics(m_fifteen_min_stats, m_ema_value);
-    update_statistics(m_daily_stats, m_ema_value);
+    update_ema(raw_value);
+    update_monitors(m_ema_value);
 }
 
-/**
- * @brief Update the EMA (Exponential Moving Average) value.
- * @param raw_value The raw ADC value to process.
- */
 void SignalProcessor::update_ema(uint16_t raw_value)
 {
-    // Calculate fast EMA for current noise
-    m_ema_value = (config::signal_processing::EMA_ALPHA * raw_value) +
-                  ((1.0f - config::signal_processing::EMA_ALPHA) * m_ema_value);
+    // Update current EMA
+    constexpr float alpha = 0.1f;
+    m_ema_value = (alpha * raw_value) + ((1.0f - alpha) * m_ema_value);
 
-    // Update baseline (very slow EMA)
-    if (m_baseline_ema == 0)
-    {
-        m_baseline_ema = m_ema_value; // Initialize baseline
-    }
-    m_baseline_ema = (config::signal_processing::BASELINE_ALPHA * m_ema_value) +
-                     ((1.0f - config::signal_processing::BASELINE_ALPHA) * m_baseline_ema);
+    // Update baseline EMA more slowly
+    constexpr float baseline_alpha = 0.001f;
+    m_baseline_ema = (baseline_alpha * raw_value) + ((1.0f - baseline_alpha) * m_baseline_ema);
 }
 
-/**
- * @brief Update the statistics for a given value.
- * @param stats The statistics structure to update.
- * @param value The value to update the statistics with.
- */
-void SignalProcessor::update_statistics(Statistics &stats, float value)
+void SignalProcessor::update_monitors(float value)
 {
-    unsigned long current_time = millis();
-
-    // Reset if window has expired
-    if (current_time - stats.last_update > stats.window_size)
+    for (auto &monitor : m_monitors)
     {
-        stats.min = stats.max = static_cast<uint16_t>(value);
-        stats.avg = value;
-        stats.samples = 1;
+        monitor->update(value);
     }
-    else
-    {
-        stats.min = std::min(stats.min, static_cast<uint16_t>(value));
-        stats.max = std::max(stats.max, static_cast<uint16_t>(value));
-        // Weighted average to prevent overflow
-        stats.avg = (stats.avg * 0.95f) + (value * 0.05f);
-        stats.samples++;
-    }
-    stats.last_update = current_time;
 }
 
-/**
- * @brief Get the noise category based on the EMA value.
- * @return The noise category.
- */
 SignalProcessor::NoiseLevel SignalProcessor::get_noise_category() const
 {
-    // Use absolute values instead of ratios
-    float current = m_ema_value;
+    float ratio = m_ema_value / m_baseline_ema;
 
-    if (current < config::signal_processing::ranges::QUIET)
+    if (ratio < 1.1f)
         return NoiseLevel::OK;
-    if (current < config::signal_processing::ranges::MODERATE)
+    if (ratio < 1.5f)
         return NoiseLevel::REGULAR;
-    if (current < config::signal_processing::ranges::LOUD)
+    if (ratio < 2.0f)
         return NoiseLevel::ELEVATED;
     return NoiseLevel::CRITICAL;
+}
+
+void SignalProcessor::add_monitor(const StatisticsMonitor::Config &config)
+{
+    // Check if monitor with this ID already exists
+    for (const auto &monitor : m_monitors)
+    {
+        if (monitor->get_id() == config.id)
+        {
+            return; // Already exists
+        }
+    }
+
+    // Create new monitor
+    m_monitors.push_back(std::unique_ptr<StatisticsMonitor>(new StatisticsMonitor(config)));
+}
+
+void SignalProcessor::remove_monitor(const std::string &id)
+{
+    auto it = m_monitors.begin();
+    while (it != m_monitors.end())
+    {
+        if ((*it)->get_id() == id)
+        {
+            it = m_monitors.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+StatisticsMonitor *SignalProcessor::get_monitor(const std::string &id) const
+{
+    for (const auto &monitor : m_monitors)
+    {
+        if (monitor->get_id() == id)
+        {
+            return monitor.get();
+        }
+    }
+    return nullptr;
+}
+
+std::vector<StatisticsMonitor *> SignalProcessor::get_priority_monitors(size_t count) const
+{
+    std::vector<StatisticsMonitor *> result;
+    std::vector<StatisticsMonitor *> sorted_monitors;
+
+    // Create vector of raw pointers
+    for (const auto &monitor : m_monitors)
+    {
+        sorted_monitors.push_back(monitor.get());
+    }
+
+    // Sort by priority
+    std::sort(sorted_monitors.begin(), sorted_monitors.end(),
+              [](const StatisticsMonitor *a, const StatisticsMonitor *b)
+              {
+                  return a->get_priority() < b->get_priority();
+              });
+
+    // Return top N monitors
+    size_t n = std::min(count, sorted_monitors.size());
+    result.assign(sorted_monitors.begin(), sorted_monitors.begin() + n);
+
+    return result;
 }

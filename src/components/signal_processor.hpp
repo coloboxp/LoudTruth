@@ -2,6 +2,10 @@
 
 #include <Arduino.h>
 #include "config/config.h"
+#include <vector>
+#include <memory>
+#include <algorithm>
+#include "statistics_monitor.hpp"
 
 /**
  * @brief Class representing the signal processor.
@@ -17,18 +21,6 @@ public:
         CRITICAL
     };
 
-    struct Statistics
-    {
-        uint16_t min{UINT16_MAX};
-        uint16_t max{0};
-        float avg{0};
-        uint32_t samples{0};
-        unsigned long last_update{0};
-        uint32_t window_size;
-
-        Statistics(uint32_t window_ms) : window_size(window_ms) {}
-    };
-
     SignalProcessor();
 
     void process_sample(uint16_t raw_value);
@@ -36,18 +28,17 @@ public:
     float get_baseline() const { return m_baseline_ema; }
     NoiseLevel get_noise_category() const;
 
-    const Statistics &get_one_min_stats() const { return m_one_min_stats; }
-    const Statistics &get_fifteen_min_stats() const { return m_fifteen_min_stats; }
-    const Statistics &get_daily_stats() const { return m_daily_stats; }
+    void add_monitor(const StatisticsMonitor::Config &config);
+    void remove_monitor(const std::string &id);
+    StatisticsMonitor *get_monitor(const std::string &id) const;
+    std::vector<StatisticsMonitor *> get_priority_monitors(size_t count = 2) const;
 
 private:
     float m_ema_value{0.0f};
     float m_baseline_ema{0.0f};
 
-    Statistics m_one_min_stats{60000};
-    Statistics m_fifteen_min_stats{900000};
-    Statistics m_daily_stats{86400000};
+    std::vector<std::unique_ptr<StatisticsMonitor>> m_monitors;
 
     void update_ema(uint16_t raw_value);
-    void update_statistics(Statistics &stats, float value);
+    void update_monitors(float value);
 };
