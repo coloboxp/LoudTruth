@@ -18,6 +18,7 @@ public:
     void begin();
     void update(const SignalProcessor &signal_processor);
     void add_plot_point(int value);
+    bool get_backlight_active() const { return m_backlight_active; }
 
 private:
     const AlertManager &m_alert_manager;
