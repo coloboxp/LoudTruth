@@ -137,10 +137,24 @@ namespace config
 
     namespace timing
     {
-        constexpr uint32_t SAMPLE_INTERVAL = 100;     // ms
-        constexpr uint32_t DISPLAY_INTERVAL = 500;    // ms
-        constexpr uint32_t LOGGING_INTERVAL = 60000;  // ms (1 minute)
-        constexpr uint32_t LED_UPDATE_INTERVAL = 100; // ms
+        struct TimingConfig
+        {
+            static uint32_t sample_interval;
+            static uint32_t display_interval;
+            static uint32_t logging_interval;
+            static uint32_t led_update_interval;
+
+            static constexpr uint32_t DEFAULT_SAMPLE_INTERVAL = 100;
+            static constexpr uint32_t DEFAULT_DISPLAY_INTERVAL = 1000;
+            static constexpr uint32_t DEFAULT_LOGGING_INTERVAL = 60000;
+            static constexpr uint32_t DEFAULT_LED_UPDATE_INTERVAL = 50;
+        };
+
+        // Use static constexpr references instead of inline variables
+        static constexpr const uint32_t &SAMPLE_INTERVAL = TimingConfig::sample_interval;
+        static constexpr const uint32_t &DISPLAY_INTERVAL = TimingConfig::display_interval;
+        static constexpr const uint32_t &LOGGING_INTERVAL = TimingConfig::logging_interval;
+        static constexpr const uint32_t &LED_UPDATE_INTERVAL = TimingConfig::led_update_interval;
     }
 
     namespace display
@@ -254,5 +268,16 @@ namespace config
     namespace device
     {
         constexpr char const *NAME = "NoiseMonitor";
+    }
+
+    namespace signal_processing
+    {
+        namespace ranges
+        {
+            extern int quiet;
+            extern int moderate;
+            extern int loud;
+            extern int max;
+        }
     }
 }

@@ -597,9 +597,14 @@ void ApiServer::handle_get_system_info()
 
 bool ApiServer::load_saved_config()
 {
+    bool config_loaded = false;
+
     if (!SD.begin())
     {
-        return false;
+        // If SD card is not available, use defaults and try to save them
+        apply_default_config();
+        save_current_config();
+        return true;
     }
 
     // Load signal processing config
@@ -619,6 +624,7 @@ bool ApiServer::load_saved_config()
                     if (value > 0.0f && value < 1.0f)
                     {
                         m_signal_processor_ptr->process_sample(value);
+                        config_loaded = true;
                     }
                 }
 
@@ -628,16 +634,18 @@ bool ApiServer::load_saved_config()
                     if (ranges["quiet"].is<int>() && ranges["moderate"].is<int>() &&
                         ranges["loud"].is<int>() && ranges["max"].is<int>())
                     {
-                        // Load ranges but don't apply - they are constants
-                        // This is just for validation
                         int quiet = ranges["quiet"];
                         int moderate = ranges["moderate"];
                         int loud = ranges["loud"];
                         int max = ranges["max"];
 
-                        if (!(quiet < moderate && moderate < loud && loud < max))
+                        if (quiet < moderate && moderate < loud && loud < max)
                         {
-                            return false;
+                            config::signal_processing::ranges::quiet = quiet;
+                            config::signal_processing::ranges::moderate = moderate;
+                            config::signal_processing::ranges::loud = loud;
+                            config::signal_processing::ranges::max = max;
+                            config_loaded = true;
                         }
                     }
                 }
@@ -656,19 +664,85 @@ bool ApiServer::load_saved_config()
             DeserializationError error = deserializeJson(doc, config_file);
             if (!error)
             {
-                // Validate timing configuration
+                // Apply timing configuration
                 if (doc["sample_interval"].is<uint32_t>())
                 {
                     uint32_t interval = doc["sample_interval"].as<uint32_t>();
-                    if (!(interval >= 1 && interval <= 1000))
+                    if (interval >= 1 && interval <= 1000)
                     {
-                        return false;
+                        config::timing::TimingConfig::sample_interval = interval;
+                        config_loaded = true;
                     }
+                }
+                if (doc["display_interval"].is<uint32_t>())
+                {
+                    config::timing::TimingConfig::display_interval =
+                        doc["display_interval"].as<uint32_t>();
+                    config_loaded = true;
+                }
+                if (doc["logging_interval"].is<uint32_t>())
+                {
+                    config::timing::TimingConfig::logging_interval =
+                        doc["logging_interval"].as<uint32_t>();
+                    config_loaded = true;
+                }
+                if (doc["led_update_interval"].is<uint32_t>())
+                {
+                    config::timing::TimingConfig::led_update_interval =
+                        doc["led_update_interval"].as<uint32_t>();
+                    config_loaded = true;
                 }
             }
             config_file.close();
         }
     }
 
+    // If no config was loaded, apply defaults
+    if (!config_loaded)
+    {
+        apply_default_config();
+        save_current_config();
+    }
+
     return true;
+}
+
+void ApiServer::apply_default_config()
+{
+    // Apply default timing values
+    config::timing::TimingConfig::sample_interval =
+        config::timing::TimingConfig::DEFAULT_SAMPLE_INTERVAL;
+    config::timing::TimingConfig::display_interval =
+        config::timing::TimingConfig::DEFAULT_DISPLAY_INTERVAL;
+    config::timing::TimingConfig::logging_interval =
+        config::timing::TimingConfig::DEFAULT_LOGGING_INTERVAL;
+    config::timing::TimingConfig::led_update_interval =
+        config::timing::TimingConfig::DEFAULT_LED_UPDATE_INTERVAL;
+}
+
+void ApiServer::save_current_config()
+{
+    if (!SD.begin())
+    {
+        return;
+    }
+
+    if (!SD.exists("/config"))
+    {
+        SD.mkdir("/config");
+    }
+
+    // Save timing configuration
+    JsonDocument timing_doc;
+    timing_doc["sample_interval"] = config::timing::TimingConfig::sample_interval;
+    timing_doc["display_interval"] = config::timing::TimingConfig::display_interval;
+    timing_doc["logging_interval"] = config::timing::TimingConfig::logging_interval;
+    timing_doc["led_update_interval"] = config::timing::TimingConfig::led_update_interval;
+
+    File timing_file = SD.open("/config/timing.json", FILE_WRITE);
+    if (timing_file)
+    {
+        serializeJson(timing_doc, timing_file);
+        timing_file.close();
+    }
 }

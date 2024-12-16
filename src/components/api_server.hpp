@@ -40,6 +40,10 @@ private:
     SignalProcessor *m_signal_processor_ptr{nullptr};
     DisplayManager *m_display_manager_ptr{nullptr};
 
+    // Add declarations for the new methods
+    void apply_default_config();
+    void save_current_config();
+
     // REST API Endpoints
     void handle_root();
     void handle_get_status();
