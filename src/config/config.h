@@ -103,6 +103,12 @@ namespace config
                 constexpr uint8_t STRIP = PIN_LED_STRIP;
 #endif
             }
+
+            // Add LED indicator pin definition
+            constexpr uint8_t LED_INDICATOR = 2; // Built-in LED pin
+
+            // Sound sensor is in the analog namespace, so we'll create an alias
+            constexpr uint8_t SOUND_SENSOR = analog::SOUND_SENSOR;
         }
     }
 
@@ -131,10 +137,10 @@ namespace config
 
     namespace timing
     {
-        constexpr uint32_t SAMPLE_INTERVAL = 10;     // 10ms between samples
-        constexpr uint32_t DISPLAY_INTERVAL = 500;   // Change from 250ms to 500ms
-        constexpr uint32_t LED_UPDATE_INTERVAL = 50; // 50ms for LED updates
-        constexpr uint32_t LOG_INTERVAL = 60000;     // Keep this the same
+        constexpr uint32_t SAMPLE_INTERVAL = 100;     // ms
+        constexpr uint32_t DISPLAY_INTERVAL = 500;    // ms
+        constexpr uint32_t LOGGING_INTERVAL = 60000;  // ms (1 minute)
+        constexpr uint32_t LED_UPDATE_INTERVAL = 100; // ms
     }
 
     namespace display
@@ -243,5 +249,10 @@ namespace config
 #else
         constexpr char const *NOISE_CHANNEL_ID = THINGSPEAK_NOISE_CHANNEL_ID;
 #endif
+    }
+
+    namespace device
+    {
+        constexpr char const *NAME = "NoiseMonitor";
     }
 }

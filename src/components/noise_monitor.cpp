@@ -108,7 +108,7 @@ void NoiseMonitor::handle_logging()
 {
     unsigned long current_time = millis();
 
-    if (current_time - m_last_log_time >= config::timing::LOG_INTERVAL)
+    if (current_time - m_last_log_time >= config::timing::LOGGING_INTERVAL)
     {
         m_logger.log_data(m_signal_processor);
         m_last_log_time = current_time;
