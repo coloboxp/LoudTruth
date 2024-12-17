@@ -187,6 +187,9 @@ void NoiseMonitor::handle_api_update()
 {
     unsigned long current_time = millis();
 
+    // Handle incoming API requests
+    m_api_server.handle();
+
     // Only attempt API updates if enough time has passed
     if (current_time - m_last_api_time >= config::thingspeak::UPDATE_INTERVAL_MS)
     {
