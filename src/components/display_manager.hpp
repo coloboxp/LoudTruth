@@ -1,45 +1,50 @@
 #pragma once
 
 #include <U8g2lib.h>
-#include "signal_processor.hpp"
-#include "config/config.h"
+#include <CircularBuffer.hpp>
 #include "alert_manager.hpp"
-#include "wifi_manager.hpp"
-#include "api_handler.hpp"
-#include "statistics_monitor.hpp"
+#include "signal_processor.hpp"
+#include "config/configuration_manager.hpp"
 
-/**
- * @brief Class representing the display manager.
- */
-class DisplayManager
-{
+class DisplayManager {
 public:
-    DisplayManager(const AlertManager &alert_manager);
+    explicit DisplayManager(const AlertManager& alert_manager);
+    
     void begin();
-    void update(const SignalProcessor &signal_processor);
-    void add_plot_point(int value);
+    void begin(const JsonObject& config);
+    bool update_config(const JsonObject& config);
+    void update(const SignalProcessor& signal_processor);
+    void add_plot_point(float value);
     bool get_backlight_active() const { return m_backlight_active; }
+    void set_backlight(bool state);
+    const char* noise_level_to_string(SignalProcessor::NoiseLevel level) const;
+    void control_backlight(SignalProcessor::NoiseLevel level);
 
 private:
-    const AlertManager &m_alert_manager;
-    U8G2_ST7565_ERC12864_ALT_F_4W_HW_SPI m_u8g2;
-    int m_plot_buffer[config::display::plot::PLOT_POINTS];
-    int m_plot_index{0};
+    static constexpr uint32_t BACKLIGHT_TIMEOUT_MS = 30000;  // 30 seconds timeout
+    U8G2_SSD1306_128X64_NONAME_F_HW_I2C m_display;  // Add the display member
+    const AlertManager& m_alert_manager;
+    CircularBuffer<int, config::display::plot::PLOT_POINTS> m_plot_buffer;
+    bool m_backlight_active{true};
+    bool m_initialized{false};
 
-    // Drawing functions
-    void draw_stats(const SignalProcessor &signal_processor);
+    // Configurable display parameters
+    uint8_t m_plot_points{config::display::plot::PLOT_POINTS};
+    uint8_t m_plot_height{config::display::plot::PLOT_HEIGHT};
+    uint8_t m_plot_baseline_y{config::display::plot::PLOT_BASELINE_Y_POSITION};
+    uint16_t m_backlight_timeout_ms{5000};
+    bool m_auto_backlight{true};
+    uint8_t m_contrast{128};
+    bool m_flip_display{false};
+
+    // Add missing member variable
+    uint32_t m_last_backlight_on{0};
+
+    void draw_header(const SignalProcessor& signal_processor);
     void draw_plot();
-    void draw_status_bar(const SignalProcessor &signal_processor);
-    void draw_monitor_stats(const SignalProcessor &signal_processor);
-    void draw_detailed_trends(const SignalProcessor &signal_processor);
-    void draw_mini_sparkline(const StatisticsMonitor *monitor, int x, int y, int w, int h);
-    void draw_trend_line(const StatisticsMonitor *monitor, int y_start, int y_end, bool primary);
-    void draw_dotted_line(int x1, int y1, int x2, int y2);
-    float calculate_trend(const StatisticsMonitor *monitor);
-
-    const char *noise_level_to_string(SignalProcessor::NoiseLevel level) const;
-    unsigned long m_last_backlight_on{0};
-    bool m_backlight_active{false};
-    void control_backlight(SignalProcessor::NoiseLevel level);
-    void set_backlight(bool state);
+    void draw_stats(const SignalProcessor& signal_processor);
+    void draw_alert_status();
+    bool validate_config(const JsonObject& config);
+    void load_config();
+    void apply_display_settings();
 };

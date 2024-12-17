@@ -1,329 +1,217 @@
 #include "display_manager.hpp"
+#include <esp_log.h>
+
+static const char* TAG = "DisplayManager";
 
 /**
  * @brief Constructor for the DisplayManager class.
  */
-DisplayManager::DisplayManager(const AlertManager &alert_manager)
-    : m_alert_manager(alert_manager),
-      m_u8g2(U8G2_R0, /* cs=*/5, /* dc=*/17, /* reset=*/16)
+DisplayManager::DisplayManager(const AlertManager& alert_manager)
+    : m_display(U8G2_R0, U8X8_PIN_NONE, U8X8_PIN_NONE, U8X8_PIN_NONE)
+    , m_alert_manager(alert_manager)
 {
-    memset(m_plot_buffer, 0, sizeof(m_plot_buffer));
 }
 
 /**
  * @brief Initialize the display.
  */
-void DisplayManager::begin()
-{
-    // Reset pin setup
-    pinMode(config::hardware::pins::display::RESET, OUTPUT);
-    digitalWrite(config::hardware::pins::display::RESET, HIGH);
-    delay(1);
-    digitalWrite(config::hardware::pins::display::RESET, LOW); // Reset display
-    delay(10);
-    digitalWrite(config::hardware::pins::display::RESET, HIGH);
-    delay(100); // Wait for reset to complete
-
-    // Initialize display
-    if (!m_u8g2.begin())
-    {
-        Serial.println("Display init failed!");
-        return;
-    }
-    Serial.println("Display initialized");
-
-    // Display setup
-    m_u8g2.setContrast(0x3A); // Using contrast from the GitHub issue
-
-    // Initialize backlight pin and ensure it starts OFF
+void DisplayManager::begin() {
+    m_display.begin();
     pinMode(config::hardware::pins::display::BACKLIGHT, OUTPUT);
-    set_backlight(false);
+    set_backlight(true);
+    
+    load_config();
+    apply_display_settings();
+    
+    m_initialized = true;
+}
 
-    // Test pattern
-    m_u8g2.clearBuffer();
-    m_u8g2.drawFrame(0, 0, m_u8g2.getWidth(), m_u8g2.getHeight());
-    m_u8g2.setFont(u8g2_font_ncenB14_tr);
-    m_u8g2.drawStr(0, 20, "Zoo Decibel");
-    m_u8g2.sendBuffer();
+void DisplayManager::begin(const JsonObject& config) {
+    m_display.begin();
+    pinMode(config::hardware::pins::display::BACKLIGHT, OUTPUT);
+    set_backlight(true);
+    
+    if (!update_config(config)) {
+        ESP_LOGW(TAG, "Invalid display configuration, using defaults");
+        load_config();
+    }
+    
+    apply_display_settings();
+    m_initialized = true;
+}
 
-    Serial.printf("Display dimensions: %dx%d\n", m_u8g2.getWidth(), m_u8g2.getHeight());
+void DisplayManager::load_config() {
+    JsonDocument doc;
+    JsonObject config = doc.to<JsonObject>();
+    
+    if (ConfigurationManager::instance().get_display_config(config)) {
+        update_config(config);
+    } else {
+        ESP_LOGW(TAG, "Failed to load display configuration, using defaults");
+        // Default values are already set in the header
+    }
+}
+
+bool DisplayManager::update_config(const JsonObject& config) {
+    if (!validate_config(config)) {
+        return false;
+    }
+
+    m_plot_points = config["plot_points"] | config::display::plot::PLOT_POINTS;
+    m_plot_height = config["plot_height"] | config::display::plot::PLOT_HEIGHT;
+    m_plot_baseline_y = config["plot_baseline_y"] | config::display::plot::PLOT_BASELINE_Y_POSITION;
+    m_backlight_timeout_ms = config["backlight_timeout_ms"] | 5000;
+    m_auto_backlight = config["auto_backlight"] | true;
+    m_contrast = config["contrast"] | 128;
+    m_flip_display = config["flip_display"] | false;
+
+    if (m_initialized) {
+        apply_display_settings();
+    }
+
+    return true;
+}
+
+void DisplayManager::apply_display_settings() {
+    m_display.setContrast(m_contrast);
+    if (m_flip_display) {
+        m_display.setDisplayRotation(U8G2_R2);
+    } else {
+        m_display.setDisplayRotation(U8G2_R0);
+    }
+}
+
+bool DisplayManager::validate_config(const JsonObject& config) {
+    if (config["plot_points"].is<uint8_t>() && 
+        (config["plot_points"].as<uint8_t>() < 10 || 
+         config["plot_points"].as<uint8_t>() > 128)) {
+        return false;
+    }
+
+    if (config["plot_height"].is<uint8_t>() && 
+        (config["plot_height"].as<uint8_t>() < 10 || 
+         config["plot_height"].as<uint8_t>() > 64)) {
+        return false;
+    }
+
+    if (config["plot_baseline_y"].is<uint8_t>() && 
+        config["plot_baseline_y"].as<uint8_t>() > 64) {
+        return false;
+    }
+
+    if (config["contrast"].is<uint8_t>() && 
+        config["contrast"].as<uint8_t>() > 255) {
+        return false;
+    }
+
+    return true;
 }
 
 /**
  * @brief Update the display with the current signal processor values.
  * @param signal_processor The signal processor instance.
  */
-void DisplayManager::update(const SignalProcessor &signal_processor)
-{
-    SignalProcessor::NoiseLevel current_level = signal_processor.get_noise_category();
+void DisplayManager::update(const SignalProcessor& signal_processor) {
+    if (!m_initialized) return;
 
-    // Control backlight based on noise level
-    control_backlight(current_level);
-
-    // Always update display regardless of backlight state
-    m_u8g2.clearBuffer();
-    draw_stats(signal_processor);
+    m_display.clearBuffer();
+    
+    draw_header(signal_processor);
     draw_plot();
-    m_u8g2.sendBuffer();
+    draw_stats(signal_processor);
+    draw_alert_status();
+    
+    m_display.sendBuffer();
+
+    // Handle auto backlight
+    if (m_auto_backlight && m_backlight_active) {
+        static uint32_t last_activity = millis();
+        if (signal_processor.get_noise_category() > SignalProcessor::NoiseLevel::OK) {
+            last_activity = millis();
+        } else if (millis() - last_activity > m_backlight_timeout_ms) {
+            set_backlight(false);
+        }
+    }
 }
 
 /**
  * @brief Add a point to the plot buffer.
  * @param value The value to add to the plot buffer.
  */
-void DisplayManager::add_plot_point(int value)
-{
-    m_plot_buffer[m_plot_index] = value;
-    m_plot_index = (m_plot_index + 1) % config::display::plot::PLOT_POINTS;
+void DisplayManager::add_plot_point(float value) {
+    if (!m_initialized) return;
+
+    // Scale value to plot height
+    int scaled_value = map(value * 100, 0, 100, 0, m_plot_height);
+    m_plot_buffer.push(scaled_value);
 }
 
 /**
  * @brief Draw the statistics on the display.
  * @param signal_processor The signal processor instance.
  */
-void DisplayManager::draw_stats(const SignalProcessor &signal_processor)
-{
-    m_u8g2.setFont(u8g2_font_4x6_tr); // Smallest font for maximum data
-
-    draw_status_bar(signal_processor);
-    draw_monitor_stats(signal_processor);
-    draw_detailed_trends(signal_processor);
-}
-
-void DisplayManager::draw_status_bar(const SignalProcessor &signal_processor)
-{
-    char buffer[32];
-    const char *level_str = noise_level_to_string(signal_processor.get_noise_category());
-
-    float current = signal_processor.get_current_value();
-    float baseline = signal_processor.get_baseline();
-    char trend_arrow = (current > baseline * 1.1f) ? '^' : (current < baseline * 0.9f) ? 'v'
-                                                                                       : '-';
-
-    snprintf(buffer, sizeof(buffer), "%s %c %.0f/%.0f",
-             level_str, trend_arrow, current, baseline);
-
-    // Inverse video for status bar
-    uint8_t width = m_u8g2.getStrWidth(buffer);
-    m_u8g2.setDrawColor(1);
-    m_u8g2.drawBox(0, 0, m_u8g2.getWidth(), 6);
-    m_u8g2.setDrawColor(0);
-    m_u8g2.drawStr(1, 5, buffer);
-    m_u8g2.setDrawColor(1);
-}
-
-void DisplayManager::draw_monitor_stats(const SignalProcessor &signal_processor)
-{
-    std::vector<StatisticsMonitor *> priority_monitors = signal_processor.get_priority_monitors(2);
-    char buffer[32];
-    int y_pos = 8; // Start after status bar
-
-    for (const auto *monitor : priority_monitors)
-    {
-        if (!monitor)
-            continue;
-
-        const auto &stats = monitor->get_stats();
-        const auto &config = monitor->get_config();
-
-        // Draw mini sparkline (24px wide, 8px high)
-        draw_mini_sparkline(monitor, 0, y_pos, 24, 8);
-
-        // Draw label and stats
-        snprintf(buffer, sizeof(buffer), "%s L%.0f A%.0f H%.0f",
-                 config.label.c_str(), stats.min, stats.avg, stats.max);
-        m_u8g2.drawStr(26, y_pos + 6, buffer);
-
-        // Draw trend indicator
-        float trend = calculate_trend(monitor);
-        const char *trend_char = trend > 0.05f ? "^" : trend < -0.05f ? "v"
-                                                                      : "-";
-        m_u8g2.drawStr(m_u8g2.getWidth() - 6, y_pos + 6, trend_char);
-
-        y_pos += 12;
-    }
-}
-
-void DisplayManager::draw_mini_sparkline(const StatisticsMonitor *monitor,
-                                         int x, int y, int w, int h)
-{
-    if (!monitor)
-        return;
-
-    const auto &history = monitor->get_stats().history;
-    if (history.empty())
-        return;
-
-    float min_val = history[0];
-    float max_val = history[0];
-
-    for (float val : history)
-    {
-        min_val = std::min(min_val, val);
-        max_val = std::max(max_val, val);
-    }
-
-    float range = std::max(max_val - min_val, 1.0f);
-
-    // Draw frame
-    m_u8g2.drawFrame(x, y, w, h);
-
-    // Draw sparkline
-    int last_x = x;
-    int last_y = y + h - 1;
-    bool first = true;
-
-    for (size_t i = 0; i < history.size(); ++i)
-    {
-        int plot_x = x + (i * (w - 2)) / history.size() + 1;
-        int plot_y = y + h - 1 - ((history[i] - min_val) * (h - 2)) / range;
-
-        if (!first)
-        {
-            m_u8g2.drawLine(last_x, last_y, plot_x, plot_y);
-        }
-
-        last_x = plot_x;
-        last_y = plot_y;
-        first = false;
-    }
-}
-
-void DisplayManager::draw_detailed_trends(const SignalProcessor &signal_processor)
-{
-    std::vector<StatisticsMonitor *> priority_monitors = signal_processor.get_priority_monitors(2);
-    if (priority_monitors.empty())
-        return;
-
-    // Draw trend area frame
-    m_u8g2.drawFrame(0, 32, m_u8g2.getWidth(), 32);
-
-    // Draw grid lines
-    for (int i = 1; i < 3; i++)
-    {
-        m_u8g2.drawHLine(1, 32 + (i * 10), m_u8g2.getWidth() - 2);
-        m_u8g2.drawVLine(i * (m_u8g2.getWidth() / 3), 33, 30);
-    }
-
-    // Draw trends
-    if (priority_monitors.size() > 1)
-    {
-        draw_trend_line(priority_monitors[0], 33, 62, true);  // Primary trend
-        draw_trend_line(priority_monitors[1], 33, 62, false); // Secondary trend
-    }
-    else
-    {
-        draw_trend_line(priority_monitors[0], 33, 62, true); // Single trend
-    }
-}
-
-float DisplayManager::calculate_trend(const StatisticsMonitor *monitor)
-{
-    if (!monitor)
-        return 0.0f;
-
-    const auto &history = monitor->get_stats().history;
-    if (history.size() < 2)
-        return 0.0f;
-
-    size_t count = std::min(size_t(5), history.size());
-    float sum_start = 0, sum_end = 0;
-
-    for (size_t i = 0; i < count; i++)
-    {
-        sum_start += history[i];
-        sum_end += history[history.size() - 1 - i];
-    }
-
-    return (sum_end - sum_start) / (count * count);
-}
-
-void DisplayManager::draw_trend_line(const StatisticsMonitor *monitor,
-                                     int y_start, int y_end, bool primary)
-{
-    if (!monitor)
-        return;
-
-    const auto &history = monitor->get_stats().history;
-    if (history.empty())
-        return;
-
-    float min_val = history[0];
-    float max_val = history[0];
-
-    for (float val : history)
-    {
-        min_val = std::min(min_val, val);
-        max_val = std::max(max_val, val);
-    }
-
-    float range = std::max(max_val - min_val, 1.0f);
-    int height = y_end - y_start;
-
-    // Draw points
-    int last_x = 0;
-    int last_y = 0;
-    bool first = true;
-
-    for (size_t i = 0; i < history.size(); ++i)
-    {
-        int x = (i * (m_u8g2.getWidth() - 4)) / history.size() + 2;
-        int y = y_end - ((history[i] - min_val) * height) / range;
-
-        if (!first)
-        {
-            if (primary)
-            {
-                m_u8g2.drawLine(last_x, last_y, x, y);
-            }
-            else
-            {
-                draw_dotted_line(last_x, last_y, x, y);
-            }
-        }
-
-        last_x = x;
-        last_y = y;
-        first = false;
-    }
-}
-
-void DisplayManager::draw_dotted_line(int x1, int y1, int x2, int y2)
-{
-    int dx = abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
-    int dy = abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
-    int err = (dx > dy ? dx : -dy) / 2;
-    int dot_counter = 0;
-
-    while (true)
-    {
-        if (dot_counter++ % 2 == 0)
-        {
-            m_u8g2.drawPixel(x1, y1);
-        }
-        if (x1 == x2 && y1 == y2)
+void DisplayManager::draw_stats(const SignalProcessor& signal_processor) {
+    char buf[32];
+    m_display.setFont(u8g2_font_5x7_tf);
+    
+    // Draw baseline value
+    snprintf(buf, sizeof(buf), "Base: %.1f", signal_processor.get_baseline());
+    m_display.drawStr(0, 62, buf);
+    
+    // Draw noise category
+    const char* category;
+    switch (signal_processor.get_noise_category()) {
+        case SignalProcessor::NoiseLevel::OK:
+            category = "OK";
             break;
-        int e2 = err;
-        if (e2 > -dx)
-        {
-            err -= dy;
-            x1 += sx;
-        }
-        if (e2 < dy)
-        {
-            err += dx;
-            y1 += sy;
-        }
+        case SignalProcessor::NoiseLevel::REGULAR:
+            category = "Regular";
+            break;
+        case SignalProcessor::NoiseLevel::ELEVATED:
+            category = "Elevated";
+            break;
+        case SignalProcessor::NoiseLevel::CRITICAL:
+            category = "Critical";
+            break;
+        default:
+            category = "Unknown";
     }
+    m_display.drawStr(64, 62, category);
+}
+
+void DisplayManager::draw_header(const SignalProcessor& signal_processor) {
+    m_display.setFont(u8g2_font_6x10_tf);
+    m_display.drawStr(0, 8, "Noise Monitor");
+    
+    // Draw current value
+    char buf[10];
+    snprintf(buf, sizeof(buf), "%.1f", signal_processor.get_current_value());
+    m_display.drawStr(64, 8, buf);
 }
 
 /**
  * @brief Draw the plot on the display.
  */
-void DisplayManager::draw_plot()
-{
-    // This can remain as is or be modified to show longer-term trends
-    // depending on your preference
+void DisplayManager::draw_plot() {
+    const uint8_t x_start = 0;
+    const uint8_t y_start = m_plot_baseline_y;
+    
+    // Draw baseline
+    m_display.drawHLine(x_start, y_start, m_plot_points);
+    
+    // Draw plot points
+    for (uint8_t i = 0; i < m_plot_buffer.size(); i++) {
+        uint8_t x = x_start + i;
+        int value = m_plot_buffer[i];
+        if (value > 0) {
+            m_display.drawVLine(x, y_start - value, value);
+        }
+    }
+}
+
+void DisplayManager::draw_alert_status() {
+    // Implementation depends on AlertManager public interface
+    // Add alert status visualization as needed
 }
 
 /**
@@ -348,22 +236,15 @@ const char *DisplayManager::noise_level_to_string(SignalProcessor::NoiseLevel le
     }
 }
 
-void DisplayManager::control_backlight(SignalProcessor::NoiseLevel level)
-{
-    const unsigned long BACKLIGHT_TIMEOUT_MS = 30000; // 30 seconds timeout
-    unsigned long current_time = millis();
-
-    // Turn on backlight if noise level is above OK
-    if (level > SignalProcessor::NoiseLevel::OK)
-    {
-        set_backlight(true);
+void DisplayManager::control_backlight(SignalProcessor::NoiseLevel level) {
+    uint32_t current_time = millis();
+    
+    if (level >= SignalProcessor::NoiseLevel::ELEVATED) {
+        m_display.setPowerSave(0);  // Turn on display
         m_last_backlight_on = current_time;
-    }
-    // Turn off backlight if timeout has elapsed
-    else if (m_backlight_active &&
-             (current_time - m_last_backlight_on >= BACKLIGHT_TIMEOUT_MS))
-    {
-        set_backlight(false);
+    } else if (m_auto_backlight && 
+              (current_time - m_last_backlight_on >= BACKLIGHT_TIMEOUT_MS)) {
+        m_display.setPowerSave(1);  // Turn off display
     }
 }
 

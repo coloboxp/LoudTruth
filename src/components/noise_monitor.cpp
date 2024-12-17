@@ -7,12 +7,68 @@ NoiseMonitor::NoiseMonitor()
     // Empty constructor - initialization moved to begin()
 }
 
-/**
- * @brief Initialize the noise monitor.
- * @return True if initialization is successful, false otherwise.
- */
+bool NoiseMonitor::load_configuration()
+{
+    JsonDocument doc;
+    
+    // Load timing configuration
+    JsonObject timing_config = doc.to<JsonObject>();
+    if (!ConfigurationManager::instance().get_timing_config(timing_config)) {
+        Serial.println("Failed to load timing configuration, using defaults");
+        m_sample_interval = config::timing::TimingConfig::DEFAULT_SAMPLE_INTERVAL;
+        m_display_interval = config::timing::TimingConfig::DEFAULT_DISPLAY_INTERVAL;
+        m_logging_interval = config::timing::TimingConfig::DEFAULT_LOGGING_INTERVAL;
+        m_led_update_interval = config::timing::TimingConfig::DEFAULT_LED_UPDATE_INTERVAL;
+    } else {
+        m_sample_interval = timing_config["sample_interval"] | config::timing::TimingConfig::DEFAULT_SAMPLE_INTERVAL;
+        m_display_interval = timing_config["display_interval"] | config::timing::TimingConfig::DEFAULT_DISPLAY_INTERVAL;
+        m_logging_interval = timing_config["logging_interval"] | config::timing::TimingConfig::DEFAULT_LOGGING_INTERVAL;
+        m_led_update_interval = timing_config["led_update_interval"] | config::timing::TimingConfig::DEFAULT_LED_UPDATE_INTERVAL;
+    }
+
+    // Load signal processing configuration
+    JsonObject signal_config = doc.to<JsonObject>();
+    if (ConfigurationManager::instance().get_signal_processing_config(signal_config)) {
+        m_signal_processor.begin(signal_config);
+    } else {
+        Serial.println("Failed to load signal processing configuration, using defaults");
+        m_signal_processor.begin();
+    }
+
+    return true;
+}
+
+void NoiseMonitor::apply_configuration()
+{
+    // Apply configurations to components that support runtime updates
+    JsonDocument doc;
+    
+    JsonObject display_config = doc.as<JsonObject>();
+    if (ConfigurationManager::instance().get_display_config(display_config)) {
+        m_display_manager.update_config(display_config);
+    }
+
+    JsonObject alert_config = doc.as<JsonObject>();
+    if (ConfigurationManager::instance().get_alert_config(alert_config)) {
+        m_alert_manager.update_config(alert_config);
+    }
+
+    JsonObject signal_config = doc.as<JsonObject>();
+    if (ConfigurationManager::instance().get_signal_processing_config(signal_config)) {
+        m_signal_processor.update_config(signal_config);
+    }
+}
+
 bool NoiseMonitor::begin()
 {
+    // Initialize configuration manager first
+    if (!ConfigurationManager::instance().begin()) {
+        Serial.println("Warning: Configuration manager initialization failed, using defaults");
+    }
+
+    // Load and apply configurations
+    load_configuration();
+
     // Initialize components one at a time with delays
     m_sound_sensor.begin();
     delay(100); // Give ADC time to stabilize
@@ -34,30 +90,45 @@ bool NoiseMonitor::begin()
     m_api_server.set_display_manager(&m_display_manager);
     m_api_server.begin();
 
-    return logger_ok; // Return logger status
+    // Apply runtime configurations after components are initialized
+    apply_configuration();
+
+    return logger_ok;
 }
 
-/**
- * @brief Update the noise monitor.
- */
 void NoiseMonitor::update()
 {
     unsigned long current_time = millis();
 
-    // Handle periodic tasks
-    handle_sampling();
-    handle_display();
-    handle_logging();
+    // Handle sampling based on configured interval
+    if (current_time - m_last_sample_time >= m_sample_interval) {
+        handle_sampling();
+        m_last_sample_time = current_time;
+    }
+
+    // Handle display updates based on configured interval
+    if (current_time - m_last_display_time >= m_display_interval) {
+        handle_display();
+        m_last_display_time = current_time;
+    }
+
+    // Handle LED updates based on configured interval
+    if (current_time - m_last_led_time >= m_led_update_interval) {
+        m_led_indicator.update(m_signal_processor);
+        m_last_led_time = current_time;
+    }
+
+    // Handle logging based on configured interval
+    if (current_time - m_last_log_time >= m_logging_interval) {
+        handle_logging();
+        m_last_log_time = current_time;
+    }
+
+    // Handle API server updates
     handle_api_update();
 
     // Update alert manager
     m_alert_manager.update(m_signal_processor);
-
-    // Handle API requests if WiFi is available
-    if (m_api_server.is_available())
-    {
-        m_api_server.handle();
-    }
 }
 
 /**
@@ -65,17 +136,14 @@ void NoiseMonitor::update()
  */
 void NoiseMonitor::handle_sampling()
 {
-    unsigned long current_time = millis();
-
-    if (current_time - m_last_sample_time >= config::timing::SAMPLE_INTERVAL)
-    {
-        uint16_t raw_value = m_sound_sensor.read_averaged_sample();
-        m_signal_processor.process_sample(raw_value);
-
-        // Update plot buffer
-        m_display_manager.add_plot_point(m_signal_processor.get_current_value());
-
-        m_last_sample_time = current_time;
+    uint32_t current_time = millis();
+    
+    if (current_time - m_last_sample_time >= config::timing::SAMPLE_INTERVAL) {
+        if (m_sound_sensor.is_ready()) {
+            uint16_t raw_value = m_sound_sensor.read();
+            m_signal_processor.process_sample(raw_value);
+            m_last_sample_time = current_time;
+        }
     }
 }
 

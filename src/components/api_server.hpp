@@ -63,4 +63,8 @@ private:
     void handle_not_found();
     void cors_headers();
     bool load_saved_config();
+
+    void send_error_response(int code, const char* message);
+    void send_success_response();
+    bool parse_monitor_config(StatisticsMonitor::Config& cfg);
 };

@@ -102,6 +102,8 @@ namespace config
 #else
                 constexpr uint8_t STRIP = PIN_LED_STRIP;
 #endif
+
+                constexpr uint8_t DATA = 2;  // Add missing DATA pin definition
             }
 
             // Add LED indicator pin definition

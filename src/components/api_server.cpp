@@ -5,6 +5,9 @@
 #include <esp_timer.h>
 #include <driver/adc.h>
 #include <esp_chip_info.h>
+#include "config/configuration_manager.hpp"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #ifndef APP_VERSION
 #define APP_VERSION "1.0.0"
@@ -48,6 +51,20 @@ void ApiServer::begin()
                 { handle_get_config(); });
     m_server.on("/api/config", HTTP_PUT, [this]()
                 { handle_put_config(); });
+
+    // System endpoints
+    m_server.on("/api/system", HTTP_GET, [this]() {
+        handle_get_system_info();
+    });
+
+    // Configuration management endpoints
+    m_server.on("/api/config/default", HTTP_POST, [this]() {
+        apply_default_config();
+    });
+
+    m_server.on("/api/config/save", HTTP_POST, [this]() {
+        save_current_config();
+    });
 
     m_server.onNotFound([this]()
                         { handle_not_found(); });
@@ -136,33 +153,35 @@ void ApiServer::handle_get_monitor()
         return send_error("Signal processor not initialized", 500);
     }
 
-    String id = m_server.arg("id");
-    if (id.isEmpty())
+    if (!m_server.hasArg("id"))
     {
-        return send_error("Monitor ID required");
+        return send_error("Missing monitor ID", 400);
     }
 
-    auto *monitor = m_signal_processor_ptr->get_monitor(id.c_str());
+    const char* monitor_id = m_server.arg("id").c_str();
+    const StatisticsMonitor* monitor = m_signal_processor_ptr->get_monitor(monitor_id);
+    
     if (!monitor)
     {
         return send_error("Monitor not found", 404);
     }
 
     JsonDocument doc;
-    doc["id"] = monitor->get_id();
-    doc["label"] = monitor->get_config().label;
-    doc["period_ms"] = monitor->get_config().period_ms;
-    doc["priority"] = monitor->get_config().priority;
+    auto mon = doc.to<JsonObject>();
+    mon["id"] = monitor->get_id();
+    mon["label"] = monitor->get_config().label;
+    mon["period_ms"] = monitor->get_config().period_ms;
+    mon["priority"] = monitor->get_config().priority;
 
-    const auto &stats = monitor->get_stats();
-    auto stats_obj = doc["stats"].to<JsonObject>();
+    const auto& stats = monitor->get_stats();
+    auto stats_obj = mon["stats"].to<JsonObject>();
     stats_obj["current"] = stats.current;
     stats_obj["min"] = stats.min;
     stats_obj["max"] = stats.max;
     stats_obj["avg"] = stats.avg;
 
     auto history = stats_obj["history"].to<JsonArray>();
-    for (const auto &value : stats.history)
+    for (const auto& value : stats.history)
     {
         history.add(value);
     }
@@ -172,239 +191,167 @@ void ApiServer::handle_get_monitor()
 
 void ApiServer::handle_post_monitor()
 {
-    if (!m_signal_processor_ptr)
-    {
-        return send_error("Signal processor not initialized", 500);
+    StatisticsMonitor::Config cfg;
+    if (!parse_monitor_config(cfg)) {
+        send_error_response(400, "Invalid monitor configuration");
+        return;
     }
 
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, m_server.arg("plain"));
-
-    if (error)
-    {
-        return send_error("Invalid JSON");
-    }
-
-    if (!validate_monitor_config(doc.as<JsonObject>()))
-    {
-        return send_error("Invalid monitor configuration");
-    }
-
-    StatisticsMonitor::Config config;
-    config.id = doc["id"] | "monitor";
-    config.label = doc["label"] | "Monitor";
-    config.period_ms = doc["period_ms"] | 60000;
-    config.priority = doc["priority"] | 99;
-    config.history_size = doc["history_size"] | 60;
-
-    m_signal_processor_ptr->add_monitor(config);
-
-    JsonDocument response;
-    response["status"] = "Monitor created";
-    response["id"] = config.id;
-    send_json_response(response, 201);
+    m_signal_processor_ptr->add_monitor(cfg);
+    send_success_response();
 }
 
 void ApiServer::handle_put_monitor()
 {
-    if (!m_signal_processor_ptr)
-    {
-        return send_error("Signal processor not initialized", 500);
-    }
-
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, m_server.arg("plain"));
-
-    if (error)
-    {
-        return send_error("Invalid JSON");
+    if (error) {
+        send_error_response(400, "Invalid JSON");
+        return;
     }
 
-    const char *id = doc["id"];
-    if (!id)
-    {
-        return send_error("Monitor ID required");
-    }
-
-    auto *monitor = m_signal_processor_ptr->get_monitor(id);
-    if (!monitor)
-    {
-        return send_error("Monitor not found", 404);
-    }
-
-    if (!validate_monitor_config(doc.as<JsonObject>()))
-    {
-        return send_error("Invalid monitor configuration");
-    }
-
-    StatisticsMonitor::Config config = monitor->get_config();
-    config.label = doc["label"] | config.label;
-    config.period_ms = doc["period_ms"] | config.period_ms;
-    config.priority = doc["priority"] | config.priority;
-    config.history_size = doc["history_size"] | config.history_size;
-
-    m_signal_processor_ptr->remove_monitor(id);
-    m_signal_processor_ptr->add_monitor(config);
-
-    JsonDocument response;
-    response["status"] = "Monitor updated";
-    response["id"] = id;
-    send_json_response(response);
+    JsonObject config = doc.as<JsonObject>();
+    m_signal_processor_ptr->update_monitor_config(config);
+    send_success_response();
 }
 
 void ApiServer::handle_delete_monitor()
 {
-    if (!m_signal_processor_ptr)
-    {
-        return send_error("Signal processor not initialized", 500);
+    String monitor_id = m_server.pathArg(0);
+    if (monitor_id.isEmpty()) {
+        send_error_response(400, "Monitor ID required");
+        return;
     }
 
-    String id = m_server.arg("id");
-    if (id.isEmpty())
-    {
-        return send_error("Monitor ID required");
-    }
-
-    m_signal_processor_ptr->remove_monitor(id.c_str());
-
-    JsonDocument response;
-    response["status"] = "Monitor deleted";
-    response["id"] = id;
-    send_json_response(response);
+    m_signal_processor_ptr->remove_monitor(std::string(monitor_id.c_str()));
+    send_success_response();
 }
 
 void ApiServer::handle_get_config()
 {
     JsonDocument doc;
+    
+    // Create JsonObjects using as<JsonObject>()
+    JsonObject timing = doc["timing"].as<JsonObject>();
+    JsonObject signal = doc["signal_processing"].as<JsonObject>();
+    JsonObject display = doc["display"].as<JsonObject>();
+    JsonObject alert = doc["alert"].as<JsonObject>();
+    JsonObject network = doc["network"].as<JsonObject>();
+    JsonObject monitor = doc["monitor"].as<JsonObject>();
 
-    // Signal processing configuration
-    JsonObject signal_config = doc["signal_processing"].to<JsonObject>();
-    signal_config["ema_alpha"] = m_signal_processor_ptr ? m_signal_processor_ptr->get_ema_alpha() : config::signal_processing::EMA_ALPHA;
-
-    JsonObject ranges = signal_config["ranges"].to<JsonObject>();
-    ranges["quiet"] = config::signal_processing::ranges::quiet;
-    ranges["moderate"] = config::signal_processing::ranges::moderate;
-    ranges["loud"] = config::signal_processing::ranges::loud;
-    ranges["max"] = config::signal_processing::ranges::max;
-
-    // Timing configuration
-    JsonObject timing_config = doc["timing"].to<JsonObject>();
-    timing_config["sample_interval"] = config::timing::TimingConfig::sample_interval;
-    timing_config["display_interval"] = config::timing::TimingConfig::display_interval;
-    timing_config["logging_interval"] = config::timing::TimingConfig::logging_interval;
-    timing_config["led_update_interval"] = config::timing::TimingConfig::led_update_interval;
+    // Get configurations
+    ConfigurationManager::instance().get_timing_config(timing);
+    ConfigurationManager::instance().get_signal_processing_config(signal);
+    ConfigurationManager::instance().get_display_config(display);
+    ConfigurationManager::instance().get_alert_config(alert);
+    ConfigurationManager::instance().get_network_config(network);
+    ConfigurationManager::instance().get_monitor_config(monitor);
 
     send_json_response(doc);
 }
 
-void ApiServer::handle_put_config()
-{
-    if (!SD.begin())
-    {
-        return send_error("SD card initialization failed");
+void ApiServer::handle_put_config() {
+    if (!m_server.hasArg("plain")) {
+        return send_error("Missing request body", 400);
     }
 
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, m_server.arg("plain"));
-
-    if (error)
-    {
-        return send_error("Invalid JSON");
+    if (error) {
+        return send_error("Invalid JSON format", 400);
     }
 
-    bool needs_restart = false;
     JsonDocument response;
     JsonArray updates = response["updated"].to<JsonArray>();
-
-    // Create config directory if it doesn't exist
-    if (!SD.exists("/config"))
-    {
-        SD.mkdir("/config");
+    bool needs_restart = false;
+    
+    // Handle timing configuration
+    if (doc["timing"].is<JsonObject>()) {
+        if (ConfigurationManager::instance().update_timing_config(doc["timing"])) {
+            updates.add("timing");
+            needs_restart = true; // Timing changes require restart
+        } else {
+            response["errors"].add(ConfigurationManager::instance().get_last_error());
+        }
     }
-
+    
     // Handle signal processing configuration
-    if (doc["signal_processing"].is<JsonObject>())
-    {
-        JsonObject signal_config = doc["signal_processing"];
-        bool config_updated = false;
-
-        if (signal_config["ranges"].is<JsonObject>())
-        {
-            JsonObject ranges = signal_config["ranges"];
-            if (ranges["quiet"].is<int>() && ranges["moderate"].is<int>() &&
-                ranges["loud"].is<int>() && ranges["max"].is<int>())
-            {
-                int quiet = ranges["quiet"];
-                int moderate = ranges["moderate"];
-                int loud = ranges["loud"];
-                int max = ranges["max"];
-
-                if (quiet < moderate && moderate < loud && loud < max)
-                {
-                    config::signal_processing::ranges::quiet = quiet;
-                    config::signal_processing::ranges::moderate = moderate;
-                    config::signal_processing::ranges::loud = loud;
-                    config::signal_processing::ranges::max = max;
-                    config_updated = true;
-                    updates.add("signal_processing.ranges");
+    if (doc["signal_processing"].is<JsonObject>()) {
+        if (ConfigurationManager::instance().update_signal_processing_config(doc["signal_processing"])) {
+            updates.add("signal_processing");
+            if (m_signal_processor_ptr) {
+                JsonObject config;
+                if (ConfigurationManager::instance().get_signal_processing_config(config)) {
+                    m_signal_processor_ptr->update_config(config);
                 }
             }
-        }
-
-        if (config_updated)
-        {
-            save_current_config();
+        } else {
+            response["errors"].add(ConfigurationManager::instance().get_last_error());
         }
     }
-
-    // Handle timing configuration
-    if (doc["timing"].is<JsonObject>())
-    {
-        JsonObject timing = doc["timing"];
-        bool timing_updated = false;
-
-        if (timing["sample_interval"].is<uint32_t>())
-        {
-            uint32_t interval = timing["sample_interval"].as<uint32_t>();
-            if (interval >= 1 && interval <= 1000)
-            {
-                config::timing::TimingConfig::sample_interval = interval;
-                timing_updated = true;
-                updates.add("timing.sample_interval");
+    
+    // Handle display configuration
+    if (doc["display"].is<JsonObject>()) {
+        if (ConfigurationManager::instance().update_display_config(doc["display"])) {
+            updates.add("display");
+            if (m_display_manager_ptr) {
+                JsonObject config;
+                if (ConfigurationManager::instance().get_display_config(config)) {
+                    m_display_manager_ptr->update_config(config);
+                }
             }
+        } else {
+            response["errors"].add(ConfigurationManager::instance().get_last_error());
         }
-
-        if (timing["display_interval"].is<uint32_t>())
-        {
-            config::timing::TimingConfig::display_interval =
-                timing["display_interval"].as<uint32_t>();
-            timing_updated = true;
-            updates.add("timing.display_interval");
+    }
+    
+    // Handle alert configuration
+    if (doc["alert"].is<JsonObject>()) {
+        if (ConfigurationManager::instance().update_alert_config(doc["alert"])) {
+            updates.add("alert");
+        } else {
+            response["errors"].add(ConfigurationManager::instance().get_last_error());
         }
-
-        if (timing["logging_interval"].is<uint32_t>())
-        {
-            config::timing::TimingConfig::logging_interval =
-                timing["logging_interval"].as<uint32_t>();
-            timing_updated = true;
-            updates.add("timing.logging_interval");
+    }
+    
+    // Handle network configuration
+    if (doc["network"].is<JsonObject>()) {
+        if (ConfigurationManager::instance().update_network_config(doc["network"])) {
+            updates.add("network");
+            needs_restart = true; // Network changes require restart
+        } else {
+            response["errors"].add(ConfigurationManager::instance().get_last_error());
         }
-
-        if (timing["led_update_interval"].is<uint32_t>())
-        {
-            config::timing::TimingConfig::led_update_interval =
-                timing["led_update_interval"].as<uint32_t>();
-            timing_updated = true;
-            updates.add("timing.led_update_interval");
-        }
-
-        if (timing_updated)
-        {
-            save_current_config();
+    }
+    
+    // Handle monitor configuration
+    if (doc["monitor"].is<JsonObject>()) {
+        if (ConfigurationManager::instance().update_monitor_config(doc["monitor"])) {
+            updates.add("monitor");
+            if (m_signal_processor_ptr) {
+                JsonObject config;
+                if (ConfigurationManager::instance().get_monitor_config(config)) {
+                    m_signal_processor_ptr->update_monitor_config(config);
+                }
+            }
+        } else {
+            response["errors"].add(ConfigurationManager::instance().get_last_error());
         }
     }
 
     response["needs_restart"] = needs_restart;
+    
+    if (updates.size() > 0) {
+        response["status"] = "Configuration updated successfully";
+        if (needs_restart) {
+            response["message"] = "Some changes require a device restart to take effect";
+        }
+    } else if (!response["errors"].size()) {
+        response["status"] = "No configurations were updated";
+    } else {
+        response["status"] = "Configuration update failed";
+    }
+
     send_json_response(response);
 }
 
@@ -424,19 +371,21 @@ void ApiServer::send_error(const char *message, int code)
 
     String response;
     serializeJson(doc, response);
+    cors_headers();
     m_server.send(code, "application/json", response);
 }
 
 void ApiServer::handle_not_found()
 {
-    send_error("Not found", 404);
+    cors_headers();
+    send_error("Endpoint not found", 404);
 }
 
 void ApiServer::cors_headers()
 {
     m_server.sendHeader("Access-Control-Allow-Origin", "*");
     m_server.sendHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    m_server.sendHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    m_server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
 bool ApiServer::validate_monitor_config(const JsonObject &config)
@@ -452,255 +401,177 @@ bool ApiServer::validate_monitor_config(const JsonObject &config)
     return true;
 }
 
-void ApiServer::handle_get_system_info()
-{
+void ApiServer::handle_get_system_info() {
     JsonDocument doc;
+    auto info = doc.to<JsonObject>();
+    
+    // System configuration
+    info["version"] = APP_VERSION;
+    info["device_name"] = config::device::NAME;
+    
+    // Get chip information
+    esp_chip_info_t chip_info;
+    esp_chip_info(&chip_info);
+    
+    // Chip information
+    info["chip"]["model"] = "ESP32-S3";
+    info["chip"]["revision"] = chip_info.revision;
+    info["chip"]["cores"] = chip_info.cores;
+    info["chip"]["features"] = chip_info.features;
 
-    // System Info
-    doc["system"]["chip_model"] = ESP.getChipModel();
-    doc["system"]["chip_cores"] = ESP.getChipCores();
-    doc["system"]["chip_revision"] = ESP.getChipRevision();
-    doc["system"]["sdk_version"] = ESP.getSdkVersion();
+    // Memory information
+    info["memory"]["heap_size"] = ESP.getHeapSize();
+    info["memory"]["free_heap"] = ESP.getFreeHeap();
+    info["memory"]["min_free_heap"] = ESP.getMinFreeHeap();
+    info["memory"]["max_alloc_heap"] = ESP.getMaxAllocHeap();
+    info["memory"]["psram_size"] = ESP.getPsramSize();
+    info["memory"]["free_psram"] = ESP.getFreePsram();
 
-    // Memory Info
-    doc["memory"]["heap_size"] = ESP.getHeapSize();
-    doc["memory"]["free_heap"] = ESP.getFreeHeap();
-    doc["memory"]["min_free_heap"] = ESP.getMinFreeHeap();
-    doc["memory"]["max_alloc_heap"] = ESP.getMaxAllocHeap();
-    doc["memory"]["free_dma"] = heap_caps_get_free_size(MALLOC_CAP_DMA);
-    doc["memory"]["free_internal"] = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    doc["memory"]["heap_fragmentation"] = static_cast<int>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) * 100.0 / ESP.getFreeHeap());
+    // Version information
+    info["version"]["app"] = APP_VERSION;
+    info["version"]["arduino"] = ARDUINO_VERSION;
+    info["version"]["sdk"] = ESP.getSdkVersion();
+    
+    // Hardware configuration
+    JsonObject hw = info["hardware"].to<JsonObject>();
+    hw["cpu_freq"] = ESP.getCpuFreqMHz();
+    
+    JsonObject pins = hw["pins"].to<JsonObject>();
+    pins["spi"]["mosi"] = config::hardware::pins::MOSI;
+    pins["spi"]["miso"] = config::hardware::pins::MISO;
+    pins["spi"]["sck"] = config::hardware::pins::SCK;
+    
+    pins["display"]["cs"] = config::hardware::pins::display::CS;
+    pins["display"]["dc"] = config::hardware::pins::display::DC;
+    pins["display"]["reset"] = config::hardware::pins::display::RESET;
+    pins["display"]["backlight"] = config::hardware::pins::display::BACKLIGHT;
+    
+    pins["led_strip"] = config::hardware::pins::led::STRIP;
+    pins["led_indicator"] = config::hardware::pins::LED_INDICATOR;
+    pins["sound_sensor"] = config::hardware::pins::analog::SOUND_SENSOR;
 
-// PSRAM if available
-#ifdef BOARD_HAS_PSRAM
-    doc["psram"]["size"] = ESP.getPsramSize();
-    doc["psram"]["free"] = ESP.getFreePsram();
-    doc["psram"]["min_free"] = ESP.getMinFreePsram();
-    doc["psram"]["max_alloc"] = ESP.getMaxAllocPsram();
-    doc["psram"]["heap_caps_total"] = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-#endif
-
-    // Flash Memory
-    doc["flash"]["chip_size"] = ESP.getFlashChipSize();
-    doc["flash"]["speed"] = ESP.getFlashChipSpeed();
-    doc["flash"]["mode"] = ESP.getFlashChipMode();
-
-    // Partition Information
-    const esp_partition_t *running = esp_ota_get_running_partition();
-    doc["partition"]["running_label"] = running->label;
-    doc["partition"]["running_addr"] = running->address;
-    doc["partition"]["running_size"] = running->size;
-    doc["partition"]["app_size"] = ESP.getSketchSize();
-    doc["partition"]["app_free"] = ESP.getFreeSketchSpace();
-
-    // SD Card Information
-    if (SD.begin())
-    {
-        doc["sd"]["available"] = true;
-        doc["sd"]["total_bytes"] = SD.totalBytes();
-        doc["sd"]["used_bytes"] = SD.usedBytes();
-        doc["sd"]["total_mb"] = SD.totalBytes() / (1024 * 1024);
-        doc["sd"]["used_mb"] = SD.usedBytes() / (1024 * 1024);
-        doc["sd"]["type"] = SD.cardType();
+    // Task information
+    #if CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID
+    TaskStatus_t *task_array;
+    uint32_t total_runtime;
+    uint32_t task_count = uxTaskGetNumberOfTasks();
+    
+    task_array = (TaskStatus_t*)pvPortMalloc(task_count * sizeof(TaskStatus_t));
+    if (task_array != NULL) {
+        task_count = uxTaskGetSystemState(task_array, task_count, &total_runtime);
+        
+        JsonArray tasks = info["tasks"].to<JsonArray>();
+        for (uint32_t i = 0; i < task_count; i++) {
+            JsonObject task = tasks.createNestedObject();
+            task["name"] = task_array[i].pcTaskName;
+            task["priority"] = task_array[i].uxCurrentPriority;
+            task["stack_hwm"] = task_array[i].usStackHighWaterMark;
+            task["state"] = task_array[i].eCurrentState;
+            task["core_id"] = task_array[i].xCoreID;
+            task["runtime_percent"] = (task_array[i].ulRunTimeCounter * 100.0f) / total_runtime;
+        }
+        vPortFree(task_array);
     }
-    else
-    {
-        doc["sd"]["available"] = false;
-    }
+    #endif
 
-    // Hardware Configuration (simplified)
-    doc["hardware"]["adc_pin"] = 36; // Default ADC1 pin for ESP32
-
-    // Application Statistics
-    if (m_signal_processor_ptr)
-    {
-        doc["app_stats"]["noise_baseline"] = m_signal_processor_ptr->get_baseline();
-        doc["app_stats"]["noise_current"] = m_signal_processor_ptr->get_current_value();
-        doc["app_stats"]["noise_category"] = static_cast<int>(m_signal_processor_ptr->get_noise_category());
-    }
-
-    if (m_display_manager_ptr)
-    {
-        doc["app_stats"]["display_backlight"] = m_display_manager_ptr->get_backlight_active();
-    }
-
-    // Task Statistics
-    doc["tasks"]["count"] = uxTaskGetNumberOfTasks();
-    doc["tasks"]["min_free_stack"] = uxTaskGetStackHighWaterMark(nullptr);
-
-    // Network Information
-    doc["network"]["wifi_rssi"] = WiFi.RSSI();
-    doc["network"]["wifi_ssid"] = WiFi.SSID();
-    doc["network"]["ip"] = WiFi.localIP().toString();
-    doc["network"]["mac"] = WiFi.macAddress();
-    doc["network"]["hostname"] = WiFi.getHostname();
-
-    // Runtime Statistics
-    doc["runtime"]["uptime_ms"] = millis();
-    doc["runtime"]["cpu_freq_mhz"] = getCpuFrequencyMhz();
-    doc["runtime"]["temp_f"] = temperatureRead();
-
-    // Build Information
-    doc["build"]["version"] = APP_VERSION;
-    doc["build"]["date"] = __DATE__;
-    doc["build"]["time"] = __TIME__;
-    doc["build"]["sdk_version"] = ESP.getSdkVersion();
-
-    // Send response
-    String output;
-    serializeJson(doc, output);
-    cors_headers();
-    m_server.send(200, "application/json", output);
+    send_json_response(doc);
 }
 
-bool ApiServer::load_saved_config()
-{
-    bool config_loaded = false;
+void ApiServer::apply_default_config() {
+    if (ConfigurationManager::instance().reset_to_defaults()) {
+        JsonDocument doc;
+        doc["status"] = "Default configuration applied";
+        send_json_response(doc);
+    } else {
+        send_error("Failed to apply default configuration", 500);
+    }
+}
 
-    if (!SD.begin())
-    {
-        // If SD card is not available, use defaults and try to save them
-        apply_default_config();
-        save_current_config();
-        return true;
+void ApiServer::save_current_config() {
+    if (ConfigurationManager::instance().save_all_configs()) {
+        send_success_response();
+    } else {
+        send_error_response(500, "Failed to save configuration");
+    }
+}
+
+bool ApiServer::load_saved_config() {
+    if (!ConfigurationManager::instance().is_initialized()) {
+        ESP_LOGE("ApiServer", "Configuration manager not initialized");
+        return false;
     }
 
-    // Load signal processing config
-    if (SD.exists("/config/signal.json"))
-    {
-        File config_file = SD.open("/config/signal.json", FILE_READ);
-        if (config_file)
-        {
-            JsonDocument doc;
-            DeserializationError error = deserializeJson(doc, config_file);
-            if (!error && m_signal_processor_ptr)
-            {
-                // Apply signal processing configuration
-                if (doc["ema_alpha"].is<float>())
-                {
-                    float value = doc["ema_alpha"].as<float>();
-                    if (value > 0.0f && value < 1.0f)
-                    {
-                        m_signal_processor_ptr->process_sample(value);
-                        config_loaded = true;
-                    }
-                }
+    JsonDocument doc;
+    JsonObject config = doc.to<JsonObject>();
 
-                if (doc["ranges"].is<JsonObject>())
-                {
-                    JsonObject ranges = doc["ranges"];
-                    if (ranges["quiet"].is<int>() && ranges["moderate"].is<int>() &&
-                        ranges["loud"].is<int>() && ranges["max"].is<int>())
-                    {
-                        int quiet = ranges["quiet"];
-                        int moderate = ranges["moderate"];
-                        int loud = ranges["loud"];
-                        int max = ranges["max"];
-
-                        if (quiet < moderate && moderate < loud && loud < max)
-                        {
-                            config::signal_processing::ranges::quiet = quiet;
-                            config::signal_processing::ranges::moderate = moderate;
-                            config::signal_processing::ranges::loud = loud;
-                            config::signal_processing::ranges::max = max;
-                            config_loaded = true;
-                        }
-                    }
-                }
-            }
-            config_file.close();
-        }
+    // Load timing configuration
+    if (!ConfigurationManager::instance().get_timing_config(config)) {
+        ESP_LOGW("ApiServer", "Failed to load timing configuration");
+        return false;
     }
 
-    // Load timing config
-    if (SD.exists("/config/timing.json"))
-    {
-        File config_file = SD.open("/config/timing.json", FILE_READ);
-        if (config_file)
-        {
-            JsonDocument doc;
-            DeserializationError error = deserializeJson(doc, config_file);
-            if (!error)
-            {
-                // Apply timing configuration
-                if (doc["sample_interval"].is<uint32_t>())
-                {
-                    uint32_t interval = doc["sample_interval"].as<uint32_t>();
-                    if (interval >= 1 && interval <= 1000)
-                    {
-                        config::timing::TimingConfig::sample_interval = interval;
-                        config_loaded = true;
-                    }
-                }
-                if (doc["display_interval"].is<uint32_t>())
-                {
-                    config::timing::TimingConfig::display_interval =
-                        doc["display_interval"].as<uint32_t>();
-                    config_loaded = true;
-                }
-                if (doc["logging_interval"].is<uint32_t>())
-                {
-                    config::timing::TimingConfig::logging_interval =
-                        doc["logging_interval"].as<uint32_t>();
-                    config_loaded = true;
-                }
-                if (doc["led_update_interval"].is<uint32_t>())
-                {
-                    config::timing::TimingConfig::led_update_interval =
-                        doc["led_update_interval"].as<uint32_t>();
-                    config_loaded = true;
-                }
-            }
-            config_file.close();
-        }
+    // Load signal processing configuration
+    if (!ConfigurationManager::instance().get_signal_processing_config(config)) {
+        ESP_LOGW("ApiServer", "Failed to load signal processing configuration");
+        return false;
     }
 
-    // If no config was loaded, apply defaults
-    if (!config_loaded)
-    {
-        apply_default_config();
-        save_current_config();
+    // Load display configuration
+    if (m_display_manager_ptr && !ConfigurationManager::instance().get_display_config(config)) {
+        ESP_LOGW("ApiServer", "Failed to load display configuration");
+        return false;
+    }
+
+    // Load alert configuration
+    if (!ConfigurationManager::instance().get_alert_config(config)) {
+        ESP_LOGW("ApiServer", "Failed to load alert configuration");
+        return false;
+    }
+
+    // Load network configuration
+    if (!ConfigurationManager::instance().get_network_config(config)) {
+        ESP_LOGW("ApiServer", "Failed to load network configuration");
+        return false;
+    }
+
+    // Load monitor configuration
+    if (m_signal_processor_ptr && !ConfigurationManager::instance().get_monitor_config(config)) {
+        ESP_LOGW("ApiServer", "Failed to load monitor configuration");
+        return false;
     }
 
     return true;
 }
 
-void ApiServer::apply_default_config()
-{
-    // Apply default timing values
-    config::timing::TimingConfig::sample_interval =
-        config::timing::TimingConfig::DEFAULT_SAMPLE_INTERVAL;
-    config::timing::TimingConfig::display_interval =
-        config::timing::TimingConfig::DEFAULT_DISPLAY_INTERVAL;
-    config::timing::TimingConfig::logging_interval =
-        config::timing::TimingConfig::DEFAULT_LOGGING_INTERVAL;
-    config::timing::TimingConfig::led_update_interval =
-        config::timing::TimingConfig::DEFAULT_LED_UPDATE_INTERVAL;
+void ApiServer::send_error_response(int code, const char* message) {
+    JsonDocument doc;
+    doc["error"] = message;
+    send_json_response(doc, code);
 }
 
-void ApiServer::save_current_config()
-{
-    if (!SD.begin())
-    {
-        return;
+void ApiServer::send_success_response() {
+    JsonDocument doc;
+    doc["status"] = "success";
+    send_json_response(doc);
+}
+
+bool ApiServer::parse_monitor_config(StatisticsMonitor::Config& cfg) {
+    if (!m_server.hasArg("plain")) {
+        return false;
     }
 
-    if (!SD.exists("/config"))
-    {
-        SD.mkdir("/config");
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, m_server.arg("plain"));
+    if (error) {
+        return false;
     }
 
-    // Save timing configuration
-    JsonDocument timing_doc;
-    timing_doc["sample_interval"] = config::timing::TimingConfig::sample_interval;
-    timing_doc["display_interval"] = config::timing::TimingConfig::display_interval;
-    timing_doc["logging_interval"] = config::timing::TimingConfig::logging_interval;
-    timing_doc["led_update_interval"] = config::timing::TimingConfig::led_update_interval;
+    JsonObject config = doc.as<JsonObject>();
+    cfg.id = config["id"] | "";
+    cfg.label = config["label"] | "";
+    cfg.period_ms = config["period_ms"] | 60000;
+    cfg.priority = config["priority"] | 99;
+    cfg.history_size = config["history_size"] | 60;
 
-    File timing_file = SD.open("/config/timing.json", FILE_WRITE);
-    if (timing_file)
-    {
-        serializeJson(timing_doc, timing_file);
-        timing_file.close();
-    }
+    return true;
 }
